@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+ <meta charset="UTF-8">
+ <meta name="viewport" content="width=device-width, initial-scale=1.0">
+ <title>SUMARJ — Acceso al Sistema</title>
+ <link rel="icon" href="/static/img/logo.png">
+ <link rel="stylesheet" href="/static/css/app.css">
+ <link rel="manifest" href="/manifest.json">
+ <link rel="apple-touch-icon" href="/static/img/apple-touch-icon.png">
+ <meta name="theme-color" content="#0a0a0a">
+ <meta name="apple-mobile-web-app-capable" content="yes">
+ <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+ <meta name="apple-mobile-web-app-title" content="SUMARJ">
+ <meta name="mobile-web-app-capable" content="yes">
+</head>
+<body>
+ <div class="login-shell">
+ <div class="login-card">
+ <div class="login-logo">
+ <img src="/static/img/logo.png" alt="SUMARJ">
+ </div>
+ <h1 class="login-title">SUMARJ</h1>
+ <p class="login-subtitle">Acabados Finos Sistema de Gestión</p>
+
+ <div id="alert" class="alert alert-error hidden"></div>
+
+ <form id="loginForm">
+ <div class="form-group">
+ <label class="form-label" for="usuario">Usuario</label>
+ <input class="form-input" id="usuario" type="text" placeholder="admin" required autofocus>
+ </div>
+ <div class="form-group">
+ <label class="form-label" for="password">Contraseña</label>
+ <div class="password-wrapper">
+ <input class="form-input" id="password" type="password" placeholder="" required>
+ <button type="button" class="password-toggle" aria-label="Mostrar contraseña"
+ onclick="togglePassword(this, 'password')">
+ <svg class="eye-on" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+ <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+ <circle cx="12" cy="12" r="3"/>
+ </svg>
+ <svg class="eye-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+ <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/>
+ <line x1="1" y1="1" x2="23" y2="23"/>
+ </svg>
+ </button>
+ </div>
+ </div>
+ <button type="submit" class="btn btn-primary btn-block" id="loginBtn">
+ Ingresar
+ </button>
+ </form>
+
+ <p class="text-muted text-center mt-4" style="font-size: 11px; letter-spacing: 0.1em;">
+ © 2026 SUMARJ Acabados Finos
+ </p>
+ </div>
+ </div>
+
+ <script>
+ function togglePassword(btn, inputId) {
+ const input = document.getElementById(inputId);
+ if (input.type === 'password') {
+ input.type = 'text';
+ btn.classList.add('visible');
+ btn.setAttribute('aria-label', 'Ocultar contraseña');
+ } else {
+ input.type = 'password';
+ btn.classList.remove('visible');
+ btn.setAttribute('aria-label', 'Mostrar contraseña');
+ }
+ }
+
+ const form = document.getElementById('loginForm');
+ const alertBox = document.getElementById('alert');
+ const btn = document.getElementById('loginBtn');
+
+ form.addEventListener('submit', async (e) => {
+ e.preventDefault();
+ alertBox.classList.add('hidden');
+ btn.disabled = true;
+ btn.innerHTML = '<span class="spinner"></span> Verificando...';
+
+ try {
+ const res = await fetch('/api/auth/login', {
+ method: 'POST',
+ headers: { 'Content-Type': 'application/json' },
+ body: JSON.stringify({
+ nombre_usuario: document.getElementById('usuario').value,
+ password: document.getElementById('password').value,
+ }),
+ });
+ if (!res.ok) {
+ const data = await res.json().catch(() => ({}));
+ throw new Error(data.detail || 'Credenciales incorrectas');
+ }
+ window.location.href = '/app';
+ } catch (err) {
+ alertBox.textContent = err.message;
+ alertBox.classList.remove('hidden');
+ btn.disabled = false;
+ btn.textContent = 'Ingresar';
+ }
+ });
+ </script>
+ <script>
+ // Registro del Service Worker (PWA)
+ if ('serviceWorker' in navigator) {
+ window.addEventListener('load', () => {
+ navigator.serviceWorker.register('/sw.js')
+ .then(() => console.log('[SW] Registrado'))
+ .catch((e) => console.warn('[SW] Error:', e));
+ });
+ }
+ </script>
+</body>
+</html>

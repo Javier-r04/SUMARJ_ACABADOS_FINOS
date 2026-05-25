@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+ <meta charset="UTF-8">
+ <meta name="viewport" content="width=device-width, initial-scale=1.0">
+ <title>SUMARJ — Sistema de Gestión</title>
+ <link rel="icon" href="/static/img/logo.png">
+ <link rel="stylesheet" href="/static/css/app.css">
+ <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+ <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+ <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.0/jspdf.plugin.autotable.min.js"></script>
+ <link rel="manifest" href="/manifest.json">
+ <link rel="apple-touch-icon" href="/static/img/apple-touch-icon.png">
+ <meta name="theme-color" content="#0a0a0a">
+ <meta name="apple-mobile-web-app-capable" content="yes">
+ <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+ <meta name="apple-mobile-web-app-title" content="SUMARJ">
+ <meta name="mobile-web-app-capable" content="yes">
+</head>
+<body>
+ <script>
+ // Aplicar tema guardado lo antes posible para evitar flash
+ (function() {
+ const saved = localStorage.getItem('sumarj_theme') || 'light';
+ if (saved === 'dark') document.documentElement.setAttribute('data-theme', 'dark');
+ })();
+ </script>
+ <div class="app-shell" id="appShell">
+ <!-- Barra superior solo móvil -->
+ <header class="mobile-topbar" id="mobileTopbar">
+ <button class="mobile-menu-btn" id="mobileMenuBtn" aria-label="Abrir menú">
+ <span></span>
+ <span></span>
+ <span></span>
+ </button>
+ <div class="mobile-topbar-brand">
+ <img src="/static/img/logo.png" alt="SUMARJ">
+ <span>SUMARJ</span>
+ </div>
+ <div class="mobile-user" id="mobileUserChip">
+ <div class="mobile-user-avatar" id="mobileUserAvatar">A</div>
+ <span id="mobileUserName">admin</span>
+ </div>
+ </header>
+
+ <!-- Overlay para cerrar menú en móvil -->
+ <div class="sidebar-overlay" id="sidebarOverlay"></div>
+
+ <aside class="sidebar" id="sidebar">
+ <div class="sidebar-brand">
+ <img src="/static/img/logo.png" alt="SUMARJ">
+ <div class="sidebar-brand-text">
+ <span class="name">SUMARJ</span>
+ <span class="sub">Acabados Finos</span>
+ </div>
+ </div>
+
+ <nav class="sidebar-nav" id="sidebarNav">
+ <div class="sidebar-section">Menú Principal</div>
+ <a class="nav-item" data-route="dashboard" data-role="admin">
+ <span class="nav-icon">▦</span> Dashboard
+ </a>
+ <a class="nav-item" data-route="pos" data-role="any">
+ <span class="nav-icon">▸</span> Punto de Venta
+ </a>
+ <a class="nav-item" data-route="cotizaciones" data-role="admin">
+ <span class="nav-icon">◈</span> Cotizaciones
+ </a>
+ <a class="nav-item" data-route="productos" data-role="admin">
+ <span class="nav-icon">▢</span> Productos
+ </a>
+ <a class="nav-item" data-route="ventas" data-role="admin">
+ <span class="nav-icon">↗</span> Ventas
+ </a>
+ <a class="nav-item" data-route="compras" data-role="admin">
+ <span class="nav-icon">↙</span> Compras
+ </a>
+
+ <div class="sidebar-section">Analítica &amp; Admin</div>
+ <a class="nav-item" data-route="reportes" data-role="admin">
+ <span class="nav-icon">⊟</span> Reportes
+ </a>
+ <a class="nav-item" data-route="usuarios" data-role="admin">
+ <span class="nav-icon">◉</span> Usuarios
+ </a>
+ <a class="nav-item" data-route="configuracion" data-role="admin">
+ <span class="nav-icon">⚙</span> Configuración
+ </a>
+ </nav>
+
+ <div class="sidebar-footer">
+ <div class="user-chip">
+ <div class="user-avatar" id="userAvatar">A</div>
+ <div class="user-info">
+ <div class="name" id="userName">—</div>
+ <div class="role" id="userRole">—</div>
+ </div>
+ </div>
+ <button class="logout-btn" onclick="App.logout()">
+ ⇤ Cerrar Sesión
+ </button>
+ <button class="theme-toggle" onclick="App.toggleTheme()" id="themeToggle">
+ Modo Claro
+ </button>
+ </div>
+ </aside>
+
+ <main class="main" id="mainContent">
+ <div class="empty-state">
+ <p>Cargando…</p>
+ </div>
+ </main>
+ </div>
+
+ <!-- Modal genérico -->
+ <div class="modal-backdrop" id="modal">
+ <div class="modal" id="modalContent">
+ <div class="modal-header">
+ <h3 class="modal-title" id="modalTitle">—</h3>
+ <button class="modal-close" onclick="App.closeModal()" aria-label="Cerrar">×</button>
+ </div>
+ <div class="modal-body" id="modalBody"></div>
+ <div class="modal-footer" id="modalFooter"></div>
+ </div>
+ </div>
+
+ <div class="toast-container" id="toastContainer"></div>
+
+ <script src="/static/js/app.js"></script>
+ <script src="/static/js/views/dashboard.js"></script>
+ <script src="/static/js/views/pos.js"></script>
+ <script src="/static/js/views/productos.js"></script>
+ <script src="/static/js/views/ventas.js"></script>
+ <script src="/static/js/views/compras.js"></script>
+ <script src="/static/js/views/cotizaciones.js"></script>
+ <script src="/static/js/views/reportes.js"></script>
+ <script src="/static/js/views/usuarios.js"></script>
+ <script src="/static/js/views/configuracion.js"></script>
+ <script>App.init();</script>
+ <script>
+ // Registro del Service Worker (PWA)
+ if ('serviceWorker' in navigator) {
+ window.addEventListener('load', () => {
+ navigator.serviceWorker.register('/sw.js')
+ .then(() => console.log('[SW] Registrado'))
+ .catch((e) => console.warn('[SW] Error:', e));
+ });
+ }
+ </script>
+</body>
+</html>

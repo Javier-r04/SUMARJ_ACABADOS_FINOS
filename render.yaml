@@ -1,0 +1,18 @@
+# Configuración de despliegue para Render.com
+# Si conectas el repo desde Render, este archivo se detecta automáticamente.
+services:
+  - type: web
+    name: sumarj
+    runtime: docker
+    plan: free
+    region: oregon
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    healthCheckPath: /health
+    envVars:
+      - key: ENVIRONMENT
+        value: production
+      - key: SECRET_KEY
+        generateValue: true
+      - key: DATABASE_URL
+        sync: false  # Se configura manualmente con la URL de Neon

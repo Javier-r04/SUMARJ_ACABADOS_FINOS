@@ -1,0 +1,40 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: sumarj_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: sumarj_user
+      POSTGRES_PASSWORD: sumarj_pass
+      POSTGRES_DB: sumarj_db
+    ports:
+      - "5434:5432"
+    volumes:
+      - sumarj_pgdata:/var/lib/postgresql/data
+      - ./db/init:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sumarj_user -d sumarj_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: sumarj_backend
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql+psycopg2://sumarj_user:sumarj_pass@db:5432/sumarj_db
+      SECRET_KEY: dev-secret-key-cambiar-en-produccion-sumarj
+      ENVIRONMENT: development
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/app
+
+volumes:
+  sumarj_pgdata:
