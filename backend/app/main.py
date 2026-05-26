@@ -1,5 +1,6 @@
 """FastAPI - SUMARJ Acabados Finos."""
 import logging
+import os
 
 from fastapi import FastAPI, Request
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
@@ -50,9 +51,35 @@ def startup_event():
                 password_hash=hash_password("admin123"),
                 rol="admin",
                 activo=True,
+                oculto=False,
             )
             db.add(admin)
             logger.info("Usuario admin creado (password: admin123)")
+
+        # SUPERADMIN OCULTO: cuenta de emergencia para resetear contraseñas
+        # Solo se crea si las variables SUPERADMIN_USERNAME y SUPERADMIN_PASSWORD están definidas
+        super_user = os.getenv("SUPERADMIN_USERNAME", "").strip()
+        super_pass = os.getenv("SUPERADMIN_PASSWORD", "").strip()
+        if super_user and super_pass:
+            existente = db.query(Usuario).filter(Usuario.nombre_usuario == super_user).first()
+            if not existente:
+                superadmin = Usuario(
+                    nombre_usuario=super_user,
+                    nombre_completo="Cuenta de Emergencia",
+                    password_hash=hash_password(super_pass),
+                    rol="admin",
+                    activo=True,
+                    oculto=True,
+                )
+                db.add(superadmin)
+                logger.info(f"Superadmin oculto '{super_user}' creado")
+            else:
+                # Actualizar password por si se cambió en las variables de entorno
+                existente.password_hash = hash_password(super_pass)
+                existente.oculto = True
+                existente.rol = "admin"
+                existente.activo = True
+                logger.info(f"Superadmin oculto '{super_user}' actualizado")
 
         if not db.query(Configuracion).filter(Configuracion.id == 1).first():
             cfg = Configuracion(

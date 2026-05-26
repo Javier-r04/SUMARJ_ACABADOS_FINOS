@@ -13,6 +13,7 @@ CREATE TABLE IF NOT EXISTS usuarios (
     password_hash   VARCHAR(255) NOT NULL,
     rol             VARCHAR(20)  NOT NULL CHECK (rol IN ('admin', 'vendedor')),
     activo          BOOLEAN      NOT NULL DEFAULT TRUE,
+    oculto          BOOLEAN      NOT NULL DEFAULT FALSE,
     creado_en       TIMESTAMP    NOT NULL DEFAULT NOW()
 );
 

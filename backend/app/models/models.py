@@ -28,6 +28,7 @@ class Usuario(Base):
     password_hash = Column(String(255), nullable=False)
     rol = Column(String(20), nullable=False, default="vendedor")
     activo = Column(Boolean, nullable=False, default=True)
+    oculto = Column(Boolean, nullable=False, default=False)
     creado_en = Column(DateTime, nullable=False, default=datetime.utcnow)
 
 

