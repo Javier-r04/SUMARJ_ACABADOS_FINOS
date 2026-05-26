@@ -141,8 +141,6 @@ const App = {
  });
  });
 
- // Ocultar las secciones (títulos como "Menú Principal", "Analítica")
- // que ya no tienen items visibles debajo
  if (!isAdmin) {
  nav.querySelectorAll('.sidebar-section').forEach((section) => {
  let next = section.nextElementSibling;
@@ -157,6 +155,9 @@ const App = {
  if (!tieneVisible) section.style.display = 'none';
  });
  }
+
+ // Una vez aplicados los permisos, mostrar el sidebar (evita FOUC al recargar)
+ nav.style.visibility = 'visible';
  },
 
  handleRoute() {
