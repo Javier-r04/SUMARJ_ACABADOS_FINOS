@@ -116,8 +116,8 @@ App.views.usuarios = {
  <div class="form-group">
  <label class="form-label">Rol *</label>
  <select class="form-select" id="uRol" ${esYo ? 'disabled style="opacity: 0.6;"' : ''}>
- <option value="vendedor" ${u.rol === 'vendedor' ? 'selected' : ''}>Vendedor (solo POS)</option>
- <option value="admin" ${u.rol === 'admin' || !esEdit ? 'selected' : ''}>Administrador (acceso total)</option>
+ <option value="vendedor" ${u.rol === 'vendedor' ? 'selected' : ''}>Vendedor</option>
+ <option value="admin" ${u.rol === 'admin' || !esEdit ? 'selected' : ''}>Administrador</option>
  </select>
  ${esYo ? '<div style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">No puedes cambiar tu propio rol</div>' : ''}
  </div>
