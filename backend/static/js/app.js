@@ -35,6 +35,7 @@ const App = {
  this.renderUserChip();
  this._setupConnectionListener();
  this._setupMobileMenu();
+ this._setupNumericInputs();
  this.setupNav();
  this.applyThemeLabel();
 
@@ -92,6 +93,32 @@ const App = {
 
  // Cerrar al cambiar de ruta (por seguridad)
  window.addEventListener('hashchange', close);
+ },
+
+ /**
+ * Desactiva comportamientos del input[type=number] que se prestan a errores:
+ *  - Scroll del mouse/touchpad que incrementa o decrementa el valor sin querer
+ *  - Flechas arriba/abajo del teclado (también incrementan/decrementan)
+ * El usuario solo puede cambiar el número escribiendo directamente.
+ */
+ _setupNumericInputs() {
+ // Bloqueo del scroll del mouse/touchpad en inputs numéricos (captura global)
+ document.addEventListener('wheel', (e) => {
+ const target = e.target;
+ if (target && target.matches && target.matches('input[type="number"]')) {
+ target.blur();
+ }
+ }, { passive: true });
+
+ // Bloqueo de flechas arriba/abajo del teclado en inputs numéricos
+ document.addEventListener('keydown', (e) => {
+ const target = e.target;
+ if (target && target.matches && target.matches('input[type="number"]')) {
+ if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+ e.preventDefault();
+ }
+ }
+ });
  },
 
  _setupConnectionListener() {
