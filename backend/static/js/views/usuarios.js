@@ -130,11 +130,19 @@ App.views.usuarios = {
  </div>
  </div>
 
+ ${!esEdit ? `
  <div class="form-group">
- <label class="form-label">${esEdit ? 'Nueva Contraseña' : 'Contraseña *'}</label>
- ${App.passwordInput('uPassword', { placeholder: '' })}
- ${esEdit ? '<div style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">Deja vacío si no quieres cambiarla.</div>' : ''}
+ <label class="form-label">Contraseña *</label>
+ ${App.passwordInput('uPassword', { placeholder: 'Mínimo 4 caracteres' })}
  </div>
+ ` : `
+ <div class="form-group">
+ <label class="form-label">Contraseña</label>
+ <div style="padding: 10px 12px; background: var(--surface-alt); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text-muted); font-size: 13px;">
+ Para cambiar la contraseña usa el botón <strong style="color: var(--gold);">🔑 Reset</strong> en la lista de usuarios.
+ </div>
+ </div>
+ `}
  `,
  footer: `
  <button class="btn btn-ghost" onclick="App.closeModal()">Cancelar</button>
@@ -147,22 +155,16 @@ App.views.usuarios = {
 
  async guardar(id) {
  const esEdit = id !== null;
- const password = document.getElementById('uPassword').value;
+ const passwordEl = document.getElementById('uPassword');
+ const password = passwordEl ? passwordEl.value : '';
 
  if (esEdit) {
- // Update
+ // Update: NO se cambia contraseña aquí. Para eso está el botón "Reset".
  const data = {
  nombre_completo: document.getElementById('uNombreCompleto').value.trim(),
  rol: document.getElementById('uRol').value,
  activo: document.getElementById('uActivo').value === 'true',
  };
- if (password) {
- if (password.length < 4) {
- App.toast('La contraseña debe tener al menos 4 caracteres', 'warning');
- return;
- }
- data.password = password;
- }
  if (!data.nombre_completo) {
  App.toast('El nombre completo es requerido', 'warning');
  return;
