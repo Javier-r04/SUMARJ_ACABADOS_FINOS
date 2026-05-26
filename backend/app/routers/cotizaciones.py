@@ -1,5 +1,5 @@
 """CRUD de cotizaciones. NO modifican stock al crear; solo al aceptar."""
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from random import randint
 from typing import Optional
@@ -42,10 +42,27 @@ def _gen_folio_venta(db: Session) -> str:
 def listar(
     q: Optional[str] = None,
     estado: Optional[str] = None,
+    tz_offset: int = Query(360, description="Offset del navegador (getTimezoneOffset)"),
     db: Session = Depends(get_db),
-    _user: Usuario = Depends(get_current_user),
+    user: Usuario = Depends(get_current_user),
 ):
     query = db.query(Cotizacion).options(joinedload(Cotizacion.detalles))
+
+    # VENDEDOR: solo ve sus propias cotizaciones del día actual (en hora local)
+    # ADMIN: ve todas las cotizaciones de todos los días
+    if user.rol != "admin":
+        tz_user = timezone(timedelta(minutes=-tz_offset))
+        ahora_local = datetime.now(tz_user)
+        ini_local = ahora_local.replace(hour=0, minute=0, second=0, microsecond=0)
+        fin_local = ini_local + timedelta(days=1)
+        ini_utc = ini_local.astimezone(timezone.utc).replace(tzinfo=None)
+        fin_utc = fin_local.astimezone(timezone.utc).replace(tzinfo=None)
+        query = query.filter(
+            Cotizacion.usuario_id == user.id,
+            Cotizacion.fecha >= ini_utc,
+            Cotizacion.fecha < fin_utc,
+        )
+
     if estado:
         query = query.filter(Cotizacion.estado == estado)
     if q:
@@ -60,7 +77,7 @@ def listar(
 def detalle(
     cot_id: int,
     db: Session = Depends(get_db),
-    _user: Usuario = Depends(get_current_user),
+    user: Usuario = Depends(get_current_user),
 ):
     cot = (
         db.query(Cotizacion)
@@ -70,6 +87,9 @@ def detalle(
     )
     if not cot:
         raise HTTPException(status_code=404, detail="Cotizacion no encontrada")
+    # Vendedor solo puede ver sus propias cotizaciones
+    if user.rol != "admin" and cot.usuario_id != user.id:
+        raise HTTPException(status_code=403, detail="No tienes acceso a esta cotización")
     return cot
 
 
@@ -77,7 +97,7 @@ def detalle(
 def crear(
     payload: CotizacionCreate,
     db: Session = Depends(get_db),
-    user: Usuario = Depends(require_admin),
+    user: Usuario = Depends(get_current_user),
 ):
     if not payload.items:
         raise HTTPException(status_code=400, detail="La cotizacion debe tener al menos un producto")
@@ -140,7 +160,7 @@ def crear(
 def aceptar(
     cot_id: int,
     db: Session = Depends(get_db),
-    user: Usuario = Depends(require_admin),
+    user: Usuario = Depends(get_current_user),
 ):
     """Convierte la cotizacion en venta. Descuenta stock."""
     cot = (
@@ -151,6 +171,10 @@ def aceptar(
     )
     if not cot:
         raise HTTPException(status_code=404, detail="Cotizacion no encontrada")
+
+    # Vendedor solo puede aceptar sus propias cotizaciones
+    if user.rol != "admin" and cot.usuario_id != user.id:
+        raise HTTPException(status_code=403, detail="No puedes aceptar cotizaciones de otros usuarios")
     if cot.estado != "pendiente":
         raise HTTPException(status_code=400, detail=f"La cotizacion ya esta {cot.estado}")
 

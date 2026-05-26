@@ -69,12 +69,19 @@ App.views.cotizaciones = {
  const params = new URLSearchParams();
  if (this.busqueda) params.set('q', this.busqueda);
  if (this.filtroEstado) params.set('estado', this.filtroEstado);
+ params.set('tz_offset', String(new Date().getTimezoneOffset()));
  this.cotizaciones = await App.api('/api/cotizaciones?' + params.toString());
  if (this.cotizaciones.length === 0) {
- tbody.innerHTML = `<tr class="empty-row"><td colspan="7">Sin cotizaciones</td></tr>`;
+ const esVendedor = App.user && App.user.rol !== 'admin';
+ const mensaje = esVendedor
+ ? 'Sin cotizaciones creadas hoy'
+ : 'Sin cotizaciones';
+ tbody.innerHTML = `<tr class="empty-row"><td colspan="7">${mensaje}</td></tr>`;
  return;
  }
- tbody.innerHTML = this.cotizaciones.map(c => `
+ tbody.innerHTML = this.cotizaciones.map(c => {
+ const esAdmin = App.user && App.user.rol === 'admin';
+ return `
  <tr>
  <td><code style="color: var(--gold);">${App.escape(c.folio)}</code></td>
  <td>
@@ -92,19 +99,20 @@ App.views.cotizaciones = {
  ${c.estado === 'pendiente' ? `
  <button class="btn btn-icon" title="Aceptar (convierte a venta)" style="color: var(--success);"
  onclick="App.views.cotizaciones.aceptar(${c.id})">✓</button>
- <button class="btn btn-icon danger" title="Rechazar"
- onclick="App.views.cotizaciones.rechazar(${c.id})">✗</button>
+ ${esAdmin ? `<button class="btn btn-icon danger" title="Rechazar"
+ onclick="App.views.cotizaciones.rechazar(${c.id})">✗</button>` : ''}
  ` : ''}
  <button class="btn btn-icon" title="Ver cotización" onclick="App.views.cotizaciones.ver(${c.id})">👁</button>
  <button class="btn btn-icon" title="Descargar PDF" style="color: var(--gold);" onclick="App.views.cotizaciones.descargarPDF(${c.id})">PDF</button>
- ${c.estado !== 'aceptada' ? `
+ ${esAdmin && c.estado !== 'aceptada' ? `
  <button class="btn btn-icon danger" title="Eliminar"
  onclick="App.views.cotizaciones.eliminar(${c.id})">🗑</button>` : ''
  }
  </div>
  </td>
  </tr>
- `).join('');
+ `;
+ }).join('');
  } catch (e) {
  tbody.innerHTML = `<tr class="empty-row"><td colspan="7">Error: ${App.escape(e.message)}</td></tr>`;
  }

@@ -166,7 +166,7 @@ App.views.dashboard = {
  labels: d.utilidad_mensual.map(x => x.mes),
  datasets: [{
  data: d.utilidad_mensual.map(x => x.utilidad),
- backgroundColor: d.utilidad_mensual.map(x => x.total >= 0 ? gold : '#d9534f'),
+ backgroundColor: d.utilidad_mensual.map(x => x.utilidad >= 0 ? gold : '#d9534f'),
  borderRadius: 4,
  }],
  },

@@ -162,7 +162,7 @@ const App = {
  handleRoute() {
  const route = (window.location.hash || '#dashboard').slice(1) || 'dashboard';
  const isAdmin = this.user.rol === 'admin';
- const allowedForVendor = ['pos'];
+ const allowedForVendor = ['pos', 'cotizaciones'];
 
  if (!isAdmin && !allowedForVendor.includes(route)) {
  window.location.hash = '#pos';
