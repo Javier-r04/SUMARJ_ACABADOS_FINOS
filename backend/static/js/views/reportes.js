@@ -27,6 +27,7 @@ App.views.reportes = {
  <button class="chip active" data-tipo="ventas">Ventas</button>
  <button class="chip" data-tipo="compras">Compras</button>
  <button class="chip" data-tipo="balance"> Balance General</button>
+ <button class="chip" data-tipo="vendedor">Por Vendedor</button>
  </div>
  </div>
  <div>
@@ -78,7 +79,7 @@ App.views.reportes = {
  </div>
 
  <div class="table-container">
- <table class="table">
+ <table class="table" id="repTabla">
  <thead>
  <tr>
  <th id="repColTipo" style="display: none;">Tipo</th>
@@ -129,10 +130,29 @@ App.views.reportes = {
  const tbody = document.getElementById('repTbody');
  tbody.innerHTML = `<tr class="empty-row"><td colspan="5"><span class="spinner"></span></td></tr>`;
 
+ // Reporte por vendedor tiene flujo separado
+ if (this.filtroTipo === 'vendedor') {
+ await this._cargarPorVendedor();
+ return;
+ }
+
  try {
  const params = new URLSearchParams();
  params.set('tipo', this.filtroTipo);
  params.set('rango', this.filtroRango);
+
+ // Restaurar encabezados originales (por si veníamos del modo "Por Vendedor")
+ const thead = document.querySelector('#repTabla thead tr');
+ if (thead) {
+ thead.innerHTML = `
+ <th id="repColTipo" style="display: none;">Tipo</th>
+ <th>Folio</th>
+ <th>Productos</th>
+ <th id="repColCliente">Cliente</th>
+ <th>Fecha</th>
+ <th class="text-right">Total</th>
+ `;
+ }
  // Offset horario del navegador en minutos
  // getTimezoneOffset devuelve minutos en sentido inverso:
  // UTC-6 (Guatemala/México Centro) → devuelve +360
@@ -232,8 +252,124 @@ App.views.reportes = {
  }
  },
 
+ async _cargarPorVendedor() {
+ const tbody = document.getElementById('repTbody');
+ try {
+ const params = new URLSearchParams();
+ params.set('rango', this.filtroRango);
+ params.set('tz_offset', String(new Date().getTimezoneOffset()));
+ if (this.filtroRango === 'rango') {
+ params.set('desde', document.getElementById('repDesde').value);
+ params.set('hasta', document.getElementById('repHasta').value);
+ }
+
+ this.datos = await App.api('/api/reportes/por-vendedor?' + params.toString());
+
+ // KPIs: total general, número de vendedores y vendedor top
+ document.getElementById('repKpis').style.display = 'grid';
+ const kpiGan = document.getElementById('repKpiGanancias');
+ kpiGan.classList.remove('kpi-warning', 'kpi-danger', 'kpi-success');
+ kpiGan.style.display = '';
+
+ document.getElementById('repKpi1Label').textContent = 'Total Vendido';
+ document.getElementById('repTotal').innerHTML = App.fmtMoneyHtml(this.datos.total_general);
+
+ document.getElementById('repKpi2Label').textContent = 'Ventas Realizadas';
+ document.getElementById('repCount').textContent = App.fmtNumber(this.datos.num_ventas_total);
+
+ const topVendedor = this.datos.resumen[0];
+ document.getElementById('repKpi3Label').textContent = 'Vendedor #1';
+ document.getElementById('repGanancias').innerHTML = topVendedor
+ ? `<span style="font-family: var(--font-display); font-size: 18px;">${App.escape(topVendedor.nombre_completo || topVendedor.nombre_usuario)}</span>`
+ : '—';
+ document.getElementById('repKpi3Sub').textContent = topVendedor
+ ? `${App.fmtMoney(topVendedor.total)} en ${topVendedor.num_ventas} ventas`
+ : 'Sin ventas en el período';
+
+ document.getElementById('repColTipo').style.display = 'none';
+
+ // Cambiar encabezados de tabla y contenido
+ const thead = document.querySelector('#repTabla thead tr');
+ if (thead) {
+ thead.innerHTML = `
+ <th>Vendedor</th>
+ <th>Usuario</th>
+ <th>Rol</th>
+ <th class="text-center">Nº Ventas</th>
+ <th class="text-right">Promedio</th>
+ <th class="text-right">Total Vendido</th>
+ `;
+ }
+
+ if (!this.datos.resumen || this.datos.resumen.length === 0) {
+ tbody.innerHTML = `<tr class="empty-row"><td colspan="6">Sin ventas en el rango seleccionado</td></tr>`;
+ return;
+ }
+
+ tbody.innerHTML = this.datos.resumen.map((v, idx) => {
+ const medalla = idx === 0 ? '🥇 ' : idx === 1 ? '🥈 ' : idx === 2 ? '🥉 ' : '';
+ return `
+ <tr style="cursor: pointer;" onclick="App.views.reportes._toggleVendedor(${idx})">
+ <td><strong>${medalla}${App.escape(v.nombre_completo)}</strong></td>
+ <td><code style="color: var(--gold);">${App.escape(v.nombre_usuario)}</code></td>
+ <td><span class="badge">${App.escape(v.rol)}</span></td>
+ <td class="text-center">${App.fmtNumber(v.num_ventas)}</td>
+ <td class="text-right">${App.fmtMoney(v.promedio)}</td>
+ <td class="text-right" style="color: var(--gold); font-weight: 600;">${App.fmtMoney(v.total)}</td>
+ </tr>
+ <tr id="repVendedorDetalle-${idx}" style="display: none;">
+ <td colspan="6" style="background: var(--surface-alt); padding: 0;">
+ <div style="padding: 14px 20px;">
+ <div style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-muted); margin-bottom: 10px; font-weight: 600;">
+ Ventas individuales de ${App.escape(v.nombre_completo)}
+ </div>
+ <table class="table" style="margin: 0; font-size: 12px;">
+ <thead>
+ <tr>
+ <th>Folio</th>
+ <th>Cliente</th>
+ <th>Fecha</th>
+ <th>Pago</th>
+ <th class="text-center">Items</th>
+ <th class="text-right">Total</th>
+ </tr>
+ </thead>
+ <tbody>
+ ${v.ventas.map(vd => `
+ <tr>
+ <td><code style="color: var(--gold);">${App.escape(vd.folio)}</code></td>
+ <td>${App.escape(vd.cliente || '—')}</td>
+ <td>${App.fmtDate(vd.fecha)}</td>
+ <td>${App.escape(vd.metodo_pago)}</td>
+ <td class="text-center">${vd.cantidad_items}</td>
+ <td class="text-right" style="color: var(--gold);">${App.fmtMoney(vd.total)}</td>
+ </tr>
+ `).join('')}
+ </tbody>
+ </table>
+ </div>
+ </td>
+ </tr>
+ `;
+ }).join('');
+ } catch (e) {
+ tbody.innerHTML = `<tr class="empty-row"><td colspan="6">Error: ${App.escape(e.message)}</td></tr>`;
+ }
+ },
+
+ _toggleVendedor(idx) {
+ const fila = document.getElementById('repVendedorDetalle-' + idx);
+ if (fila) {
+ fila.style.display = fila.style.display === 'none' ? '' : 'none';
+ }
+ },
+
  exportarPDF() {
- if (!this.datos || this.datos.filas.length === 0) {
+ if (this.filtroTipo === 'vendedor') {
+ this._exportarPDFVendedor();
+ return;
+ }
+ if (!this.datos || !this.datos.filas || this.datos.filas.length === 0) {
  App.toast('No hay datos para exportar', 'warning');
  return;
  }
@@ -482,6 +618,117 @@ App.views.reportes = {
  // Guardar
  const fecha = new Date().toISOString().slice(0, 10);
  const filename = `reporte_${this.filtroTipo}_${fecha}.pdf`;
+ doc.save(filename);
+ App.toast('PDF generado: ' + filename, 'success');
+ },
+
+ _exportarPDFVendedor() {
+ if (!this.datos || !this.datos.resumen || this.datos.resumen.length === 0) {
+ App.toast('No hay datos para exportar', 'warning');
+ return;
+ }
+
+ const { jsPDF } = window.jspdf;
+ const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+ const cfg = App.config || {};
+ const pageW = doc.internal.pageSize.getWidth();
+
+ // Encabezado
+ doc.setFillColor(10, 10, 10);
+ doc.rect(0, 0, pageW, 32, 'F');
+ doc.setFillColor(212, 175, 55);
+ doc.rect(0, 32, pageW, 1.5, 'F');
+
+ doc.setTextColor(212, 175, 55);
+ doc.setFont('helvetica', 'bold');
+ doc.setFontSize(20);
+ doc.text(cfg.nombre_negocio || 'SUMARJ Acabados Finos', 14, 14);
+
+ doc.setTextColor(180, 180, 170);
+ doc.setFontSize(8);
+ doc.setFont('helvetica', 'normal');
+ const subInfo = [cfg.telefono, cfg.correo].filter(Boolean).join(' | ');
+ if (subInfo) doc.text(subInfo, 14, 20);
+ if (cfg.direccion) doc.text(cfg.direccion, 14, 24.5);
+
+ doc.setTextColor(220, 220, 220);
+ doc.setFontSize(11);
+ doc.setFont('helvetica', 'bold');
+ doc.text('REPORTE POR VENDEDOR', pageW - 14, 14, { align: 'right' });
+
+ doc.setTextColor(160, 160, 150);
+ doc.setFontSize(8);
+ doc.setFont('helvetica', 'normal');
+ const ahora = new Date();
+ doc.text(ahora.toLocaleString(), pageW - 14, 20, { align: 'right' });
+
+ const rangoLabel = {
+ dia: 'Hoy',
+ semana: 'Esta semana',
+ mes: 'Este mes',
+ rango: 'Personalizado',
+ }[this.filtroRango] || this.filtroRango;
+ doc.text('Rango: ' + rangoLabel, pageW - 14, 24.5, { align: 'right' });
+
+ // Resumen general
+ doc.setTextColor(40, 40, 40);
+ doc.setFont('helvetica', 'bold');
+ doc.setFontSize(11);
+ doc.text('Resumen del Período', 14, 45);
+
+ doc.setDrawColor(212, 175, 55);
+ doc.line(14, 47, pageW - 14, 47);
+
+ doc.setFont('helvetica', 'normal');
+ doc.setFontSize(9);
+ doc.text(`Total vendido: $${Number(this.datos.total_general).toLocaleString('en-US', { minimumFractionDigits: 2 })}`, 14, 53);
+ doc.text(`Ventas realizadas: ${this.datos.num_ventas_total}`, 14, 58);
+ doc.text(`Vendedores activos: ${this.datos.num_vendedores}`, 14, 63);
+
+ // Tabla principal
+ let y = 73;
+ doc.setFillColor(40, 40, 40);
+ doc.rect(14, y, pageW - 28, 7, 'F');
+ doc.setTextColor(212, 175, 55);
+ doc.setFont('helvetica', 'bold');
+ doc.setFontSize(8);
+ doc.text('VENDEDOR', 16, y + 5);
+ doc.text('USUARIO', 70, y + 5);
+ doc.text('VENTAS', 105, y + 5, { align: 'right' });
+ doc.text('PROMEDIO', 140, y + 5, { align: 'right' });
+ doc.text('TOTAL', 192, y + 5, { align: 'right' });
+
+ y += 9;
+ doc.setTextColor(40, 40, 40);
+ doc.setFont('helvetica', 'normal');
+ doc.setFontSize(8);
+
+ this.datos.resumen.forEach((v, idx) => {
+ if (y > 270) {
+ doc.addPage();
+ y = 20;
+ }
+ const medalla = idx === 0 ? '#1 ' : idx === 1 ? '#2 ' : idx === 2 ? '#3 ' : '';
+ doc.text(this.truncate(medalla + (v.nombre_completo || ''), 30), 16, y);
+ doc.text(this.truncate(v.nombre_usuario || '', 18), 70, y);
+ doc.text(String(v.num_ventas), 105, y, { align: 'right' });
+ doc.text(`$${Number(v.promedio).toLocaleString('en-US', { minimumFractionDigits: 2 })}`, 140, y, { align: 'right' });
+ doc.setFont('helvetica', 'bold');
+ doc.text(`$${Number(v.total).toLocaleString('en-US', { minimumFractionDigits: 2 })}`, 192, y, { align: 'right' });
+ doc.setFont('helvetica', 'normal');
+ y += 6;
+ });
+
+ // Pie
+ doc.setDrawColor(212, 175, 55);
+ doc.line(14, y + 2, pageW - 14, y + 2);
+ doc.setFont('helvetica', 'bold');
+ doc.setFontSize(10);
+ doc.text('TOTAL GENERAL', 14, y + 8);
+ doc.setTextColor(212, 175, 55);
+ doc.text(`$${Number(this.datos.total_general).toLocaleString('en-US', { minimumFractionDigits: 2 })}`, 192, y + 8, { align: 'right' });
+
+ const filename = `reporte_vendedores_${ahora.toISOString().slice(0, 10)}.pdf`;
  doc.save(filename);
  App.toast('PDF generado: ' + filename, 'success');
  },

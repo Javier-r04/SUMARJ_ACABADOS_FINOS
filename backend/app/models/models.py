@@ -103,6 +103,7 @@ class Venta(Base):
     cotizacion_id = Column(Integer, ForeignKey("cotizaciones.id", ondelete="SET NULL"))
 
     detalles = relationship("VentaDetalle", back_populates="venta", cascade="all, delete-orphan")
+    usuario = relationship("Usuario", foreign_keys=[usuario_id])
 
 
 class VentaDetalle(Base):
