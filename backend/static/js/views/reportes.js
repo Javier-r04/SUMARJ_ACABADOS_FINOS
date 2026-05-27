@@ -197,7 +197,8 @@ App.views.reportes = {
  else kpiGan.classList.add('kpi-success');
 
  // Mostrar columna Tipo
- document.getElementById('repColTipo').style.display = '';
+ const colTipoBal = document.getElementById('repColTipo');
+ if (colTipoBal) colTipoBal.style.display = '';
  } else {
  // Ventas o Compras: solo 2 KPIs (Total y Movimientos), ocultar Ganancias
  kpiGan.style.display = 'none';
@@ -209,7 +210,8 @@ App.views.reportes = {
  document.getElementById('repCount').textContent = App.fmtNumber(this.datos.movimientos);
 
  // Ocultar columna Tipo
- document.getElementById('repColTipo').style.display = 'none';
+ const colTipoVC = document.getElementById('repColTipo');
+ if (colTipoVC) colTipoVC.style.display = 'none';
  }
 
  const colspan = esBalance ? 6 : 5;
@@ -283,10 +285,11 @@ App.views.reportes = {
  ? `<span style="font-family: var(--font-display); font-size: 18px;">${App.escape(topVendedor.nombre_completo || topVendedor.nombre_usuario)}</span>`
  : '—';
  document.getElementById('repKpi3Sub').textContent = topVendedor
- ? `${App.fmtMoney(topVendedor.total)} en ${topVendedor.num_ventas} ventas`
+ ? `${App.fmtMoneyPlain(topVendedor.total)} en ${topVendedor.num_ventas} ventas`
  : 'Sin ventas en el período';
 
- document.getElementById('repColTipo').style.display = 'none';
+ const colTipo = document.getElementById('repColTipo');
+ if (colTipo) colTipo.style.display = 'none';
 
  // Cambiar encabezados de tabla y contenido
  const thead = document.querySelector('#repTabla thead tr');
