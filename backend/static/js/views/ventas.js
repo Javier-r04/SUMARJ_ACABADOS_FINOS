@@ -211,9 +211,27 @@ App.views.ventas = {
  const metodo = venta.metodo_pago || 'efectivo';
  const efectivo = Number(venta.monto_efectivo || 0);
  const tarjeta = Number(venta.monto_tarjeta || 0);
+ const pctDesc = Number(venta.descuento_pct || 0);
+ const subtotal = Number(venta.subtotal || 0);
+ const montoDesc = subtotal * pctDesc / 100;
+
+ // Bloque de descuento (solo si aplicó descuento)
+ const bloqueDescuento = pctDesc > 0 ? `
+ <div style="padding: 6px 10px; background: rgba(217, 83, 79, 0.08); border-left: 3px solid var(--danger); border-radius: 4px; margin-bottom: 10px;">
+ <div style="display: flex; justify-content: space-between; padding: 2px 0; font-size: 12px;">
+ <span class="text-muted">Subtotal</span>
+ <span>${App.fmtMoney(subtotal)}</span>
+ </div>
+ <div style="display: flex; justify-content: space-between; padding: 2px 0; font-size: 12px;">
+ <span style="color: var(--danger); font-weight: 600;">Descuento (${pctDesc}%)</span>
+ <strong style="color: var(--danger);">-${App.fmtMoney(montoDesc)}</strong>
+ </div>
+ </div>
+ ` : '';
 
  if (metodo === 'efectivo') {
  return `
+ ${bloqueDescuento}
  <div style="display: flex; justify-content: space-between; align-items: center;">
  <span> Efectivo</span>
  <strong style="color: var(--gold);">${App.fmtMoney(efectivo > 0 ? efectivo : venta.total)}</strong>
@@ -222,6 +240,7 @@ App.views.ventas = {
  }
  if (metodo === 'tarjeta') {
  return `
+ ${bloqueDescuento}
  <div style="display: flex; justify-content: space-between; align-items: center;">
  <span> Tarjeta</span>
  <strong style="color: var(--gold);">${App.fmtMoney(tarjeta > 0 ? tarjeta : venta.total)}</strong>
@@ -230,6 +249,7 @@ App.views.ventas = {
  }
  // hibrido
  return `
+ ${bloqueDescuento}
  <div style="display: flex; justify-content: space-between; padding: 2px 0;">
  <span> Efectivo</span>
  <strong>${App.fmtMoney(efectivo)}</strong>
