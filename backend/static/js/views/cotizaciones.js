@@ -74,7 +74,7 @@ App.views.cotizaciones = {
  if (this.cotizaciones.length === 0) {
  const esVendedor = App.user && App.user.rol !== 'admin';
  const mensaje = esVendedor
- ? 'Sin cotizaciones creadas hoy'
+ ? 'Sin cotizaciones creadas en los últimos 7 días'
  : 'Sin cotizaciones';
  tbody.innerHTML = `<tr class="empty-row"><td colspan="7">${mensaje}</td></tr>`;
  return;

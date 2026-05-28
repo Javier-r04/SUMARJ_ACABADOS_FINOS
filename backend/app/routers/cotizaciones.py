@@ -48,19 +48,14 @@ def listar(
 ):
     query = db.query(Cotizacion).options(joinedload(Cotizacion.detalles))
 
-    # VENDEDOR: solo ve sus propias cotizaciones del día actual (en hora local)
-    # ADMIN: ve todas las cotizaciones de todos los días
+    # VENDEDOR: solo ve sus propias cotizaciones de los últimos 7 días rodantes
+    #           (cada cotización vive 7 días desde su fecha de creación)
+    # ADMIN: ve todas las cotizaciones de todos los tiempos
     if user.rol != "admin":
-        tz_user = timezone(timedelta(minutes=-tz_offset))
-        ahora_local = datetime.now(tz_user)
-        ini_local = ahora_local.replace(hour=0, minute=0, second=0, microsecond=0)
-        fin_local = ini_local + timedelta(days=1)
-        ini_utc = ini_local.astimezone(timezone.utc).replace(tzinfo=None)
-        fin_utc = fin_local.astimezone(timezone.utc).replace(tzinfo=None)
+        hace_7_dias = datetime.utcnow() - timedelta(days=7)
         query = query.filter(
             Cotizacion.usuario_id == user.id,
-            Cotizacion.fecha >= ini_utc,
-            Cotizacion.fecha < fin_utc,
+            Cotizacion.fecha >= hace_7_dias,
         )
 
     if estado:
