@@ -36,7 +36,25 @@ App.views.pos = {
  </div>
 
  <div class="cart-summary">
- <div class="cart-total">
+ <div style="display: flex; justify-content: space-between; padding: 4px 0; font-size: 12px;">
+ <span class="text-muted">Subtotal</span>
+ <span id="cartSubtotal">${App.fmtMoneyHtml(0)}</span>
+ </div>
+ <div style="display: flex; justify-content: space-between; align-items: center; padding: 6px 0; font-size: 12px; gap: 8px;">
+ <span class="text-muted">Descuento</span>
+ <div style="display: flex; align-items: center; gap: 6px;">
+ <input id="cartDescuento" type="number" min="0" max="40" step="1"
+ value="0"
+ oninput="App.views.pos.cambiarDescuento(this)"
+ style="width: 60px; text-align: center; padding: 4px 6px; background: var(--surface-alt); border: 1px solid var(--border); border-radius: 4px; color: inherit; font-weight: 600;">
+ <span style="font-weight: 600;">%</span>
+ </div>
+ </div>
+ <div id="cartDescuentoRow" style="display: none; justify-content: space-between; padding: 4px 0 8px; font-size: 12px;">
+ <span class="text-muted">Monto descuento</span>
+ <span style="color: var(--danger);" id="cartDescuentoMonto">-${App.fmtMoneyHtml(0)}</span>
+ </div>
+ <div class="cart-total" style="border-top: 2px solid var(--border); padding-top: 8px;">
  <span class="label">Total</span>
  <span class="value" id="cartTotal">${App.fmtMoneyHtml(0)}</span>
  </div>
@@ -159,22 +177,30 @@ App.views.pos = {
  limpiarCarrito() {
  if (this.carrito.length === 0) return;
  this.carrito = [];
+ const inp = document.getElementById('cartDescuento');
+ if (inp) inp.value = 0;
  this.renderCarrito();
  },
 
  renderCarrito() {
  const items = document.getElementById('cartItems');
  const totalEl = document.getElementById('cartTotal');
+ const subtotalEl = document.getElementById('cartSubtotal');
+ const descRow = document.getElementById('cartDescuentoRow');
+ const descMonto = document.getElementById('cartDescuentoMonto');
+
  if (this.carrito.length === 0) {
  items.innerHTML = `<div class="cart-empty">Carrito vacío</div>`;
+ if (subtotalEl) subtotalEl.innerHTML = App.fmtMoneyHtml(0);
+ if (descRow) descRow.style.display = 'none';
  totalEl.innerHTML = App.fmtMoneyHtml(0);
  return;
  }
 
- let total = 0;
+ let subtotal = 0;
  items.innerHTML = this.carrito.map(({ producto, cantidad }) => {
  const sub = Number(producto.precio_unitario) * cantidad;
- total += sub;
+ subtotal += sub;
  return `
  <div class="cart-item">
  <div class="top">
@@ -194,7 +220,41 @@ App.views.pos = {
  `;
  }).join('');
 
+ // Aplicar descuento
+ const pct = this._obtenerDescuento();
+ const montoDesc = subtotal * (pct / 100);
+ const total = subtotal - montoDesc;
+
+ if (subtotalEl) subtotalEl.innerHTML = App.fmtMoneyHtml(subtotal);
+ if (descRow && descMonto) {
+ if (pct > 0) {
+ descRow.style.display = 'flex';
+ descMonto.innerHTML = '-' + App.fmtMoneyHtml(montoDesc);
+ } else {
+ descRow.style.display = 'none';
+ }
+ }
  totalEl.innerHTML = App.fmtMoneyHtml(total);
+ },
+
+ _obtenerDescuento() {
+ const input = document.getElementById('cartDescuento');
+ if (!input) return 0;
+ let v = parseFloat(input.value) || 0;
+ if (v < 0) v = 0;
+ if (v > 40) v = 40;
+ return v;
+ },
+
+ cambiarDescuento(input) {
+ let v = parseFloat(input.value) || 0;
+ if (v < 0) { v = 0; input.value = 0; }
+ if (v > 40) {
+ v = 40;
+ input.value = 40;
+ App.toast('Descuento máximo: 40%', 'warning');
+ }
+ this.renderCarrito();
  },
 
  async finalizarVenta() {
@@ -203,9 +263,11 @@ App.views.pos = {
  return;
  }
 
- // Calcular el total
- const total = this.carrito.reduce((sum, c) =>
+ // Calcular el subtotal y aplicar descuento
+ const subtotal = this.carrito.reduce((sum, c) =>
  sum + (Number(c.producto.precio_unitario) * c.cantidad), 0);
+ const pctDesc = this._obtenerDescuento();
+ const total = subtotal - (subtotal * pctDesc / 100);
 
  // Abrir modal de cobro
  App.openModal({
@@ -446,6 +508,7 @@ App.views.pos = {
  metodo_pago: this._metodoPago,
  monto_efectivo: this._montoEfectivo,
  monto_tarjeta: this._montoTarjeta,
+ descuento_pct: this._obtenerDescuento(),
  items: this.carrito.map(c => ({
  producto_id: c.producto.id,
  cantidad: c.cantidad,
@@ -468,6 +531,8 @@ App.views.pos = {
 
  // Limpiar carrito
  this.carrito = [];
+ const inpDesc = document.getElementById('cartDescuento');
+ if (inpDesc) inpDesc.value = 0;
  this.renderCarrito();
  document.getElementById('posCliente').value = '';
  await this.cargarProductos();
@@ -572,6 +637,8 @@ App.views.pos = {
  fecha: venta.fecha,
  vigencia_dias: null,
  detalles: venta.detalles,
+ subtotal: venta.subtotal,
+ descuento_pct: venta.descuento_pct,
  total: venta.total,
  filename: `ticket_${venta.folio}.pdf`,
  pieMensaje: '¡Gracias por su compra!',

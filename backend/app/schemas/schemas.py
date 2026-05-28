@@ -143,11 +143,13 @@ class VentaCreate(BaseModel):
     metodo_pago: str = Field(default="efectivo", pattern="^(efectivo|tarjeta|hibrido)$")
     monto_efectivo: Decimal = Decimal("0")
     monto_tarjeta: Decimal = Decimal("0")
+    descuento_pct: Decimal = Field(default=Decimal("0"), ge=0, le=40)
     items: List[ItemCarrito]
 
 
 class VentaUpdate(BaseModel):
     cliente: Optional[str] = None
+    descuento_pct: Optional[Decimal] = Field(default=None, ge=0, le=40)
     items: List[ItemCarrito]
 
 
@@ -168,6 +170,7 @@ class VentaOut(BaseModel):
     folio: str
     cliente: str
     subtotal: Decimal
+    descuento_pct: Decimal
     total: Decimal
     cantidad_items: int
     fecha: datetime

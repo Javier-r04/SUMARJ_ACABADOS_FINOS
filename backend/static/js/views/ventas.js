@@ -104,6 +104,8 @@ App.views.ventas = {
  fecha: venta.fecha,
  vigencia_dias: null,
  detalles: venta.detalles,
+ subtotal: venta.subtotal,
+ descuento_pct: venta.descuento_pct,
  total: venta.total,
  filename: `ticket_${venta.folio}.pdf`,
  pieMensaje: '¡Gracias por su compra!',

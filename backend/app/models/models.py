@@ -93,6 +93,7 @@ class Venta(Base):
     cliente = Column(String(150), nullable=False, default="")
     usuario_id = Column(Integer, ForeignKey("usuarios.id", ondelete="SET NULL"))
     subtotal = Column(Numeric(12, 2), nullable=False, default=0)
+    descuento_pct = Column(Numeric(5, 2), nullable=False, default=0)
     total = Column(Numeric(12, 2), nullable=False, default=0)
     cantidad_items = Column(Integer, nullable=False, default=0)
     fecha = Column(DateTime, nullable=False, default=datetime.utcnow)

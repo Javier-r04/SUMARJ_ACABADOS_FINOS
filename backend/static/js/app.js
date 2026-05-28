@@ -870,7 +870,7 @@ const App = {
  // ------------------------------------------------------------------------
  // Generador genérico de PDF para ventas y cotizaciones (formato TICKET)
  // ------------------------------------------------------------------------
- generarPDFDocumento({ tipo, folio, cliente, cliente_telefono, cliente_correo, fecha, vigencia_dias, detalles, total, filename, pieMensaje }) {
+ generarPDFDocumento({ tipo, folio, cliente, cliente_telefono, cliente_correo, fecha, vigencia_dias, detalles, total, filename, pieMensaje, subtotal, descuento_pct }) {
  const { jsPDF } = window.jspdf;
  const cfg = this.config || {};
 
@@ -1058,13 +1058,28 @@ const App = {
  });
 
  // ====================================================================
- // TOTAL
+ // TOTAL (con desglose de descuento si aplica)
  // ====================================================================
  y += 1;
  doc.setLineWidth(0.6);
  doc.setDrawColor(0, 0, 0);
  doc.line(margen, y, ancho - margen, y);
  y += 6;
+
+ const pctDesc = Number(descuento_pct || 0);
+ if (pctDesc > 0 && subtotal != null) {
+ // Mostrar subtotal y descuento
+ doc.setFont('helvetica', 'normal');
+ doc.setFontSize(9);
+ doc.text('Subtotal:', xCant, y);
+ doc.text(App.fmtMoneyPlain(subtotal), xTotalR, y, { align: 'right' });
+ y += 5;
+
+ const montoDesc = Number(subtotal) * pctDesc / 100;
+ doc.text(`Descuento (${pctDesc}%):`, xCant, y);
+ doc.text('-' + App.fmtMoneyPlain(montoDesc), xTotalR, y, { align: 'right' });
+ y += 6;
+ }
 
  doc.setFont('helvetica', 'bold');
  doc.setFontSize(13);

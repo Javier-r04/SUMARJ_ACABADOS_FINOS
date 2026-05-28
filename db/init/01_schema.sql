@@ -96,6 +96,7 @@ CREATE TABLE IF NOT EXISTS ventas (
     cliente         VARCHAR(150) NOT NULL DEFAULT '',
     usuario_id      INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
     subtotal        NUMERIC(12,2) NOT NULL DEFAULT 0,
+    descuento_pct   NUMERIC(5,2) NOT NULL DEFAULT 0,
     total           NUMERIC(12,2) NOT NULL DEFAULT 0,
     cantidad_items  INTEGER NOT NULL DEFAULT 0,
     fecha           TIMESTAMP NOT NULL DEFAULT NOW(),

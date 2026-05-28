@@ -75,6 +75,13 @@ def crear_venta(
         productos.append((prod, item.cantidad))
 
     folio = _gen_folio(db)
+    # Limitar descuento a 0-40%
+    descuento_pct = Decimal(str(payload.descuento_pct or 0))
+    if descuento_pct < 0:
+        descuento_pct = Decimal("0")
+    if descuento_pct > 40:
+        descuento_pct = Decimal("40")
+
     venta = Venta(
         folio=folio,
         cliente=(payload.cliente or "").strip(),
@@ -82,6 +89,7 @@ def crear_venta(
         metodo_pago=payload.metodo_pago or "efectivo",
         monto_efectivo=Decimal(str(payload.monto_efectivo or 0)),
         monto_tarjeta=Decimal(str(payload.monto_tarjeta or 0)),
+        descuento_pct=descuento_pct,
         fecha=datetime.utcnow(),
     )
     db.add(venta)
@@ -107,7 +115,8 @@ def crear_venta(
         cantidad_items += cant
 
     venta.subtotal = total
-    venta.total = total
+    monto_descuento = (total * descuento_pct / Decimal("100")).quantize(Decimal("0.01"))
+    venta.total = total - monto_descuento
     venta.cantidad_items = cantidad_items
 
     db.commit()
@@ -163,6 +172,13 @@ def update_venta(
     # 4. Actualizar campos editables (NO se permite cambiar metodo de pago ni montos)
     if payload.cliente is not None:
         venta.cliente = (payload.cliente or "").strip()
+    if payload.descuento_pct is not None:
+        descuento_pct = Decimal(str(payload.descuento_pct))
+        if descuento_pct < 0:
+            descuento_pct = Decimal("0")
+        if descuento_pct > 40:
+            descuento_pct = Decimal("40")
+        venta.descuento_pct = descuento_pct
 
     # 5. Crear nuevos detalles y descontar stock
     total = Decimal("0")
@@ -185,7 +201,8 @@ def update_venta(
         cantidad_items += cant
 
     venta.subtotal = total
-    venta.total = total
+    monto_descuento = (total * venta.descuento_pct / Decimal("100")).quantize(Decimal("0.01"))
+    venta.total = total - monto_descuento
     venta.cantidad_items = cantidad_items
 
     db.commit()

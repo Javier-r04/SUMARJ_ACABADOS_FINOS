@@ -188,6 +188,7 @@ def aceptar(
         cliente=cot.cliente,
         usuario_id=user.id,
         subtotal=cot.subtotal,
+        descuento_pct=cot.descuento_porcentaje or Decimal("0"),
         total=cot.total,
         cantidad_items=cot.cantidad_items,
         fecha=datetime.utcnow(),
