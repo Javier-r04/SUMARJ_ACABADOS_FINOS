@@ -98,18 +98,32 @@ App.views.productos = {
  }
  tbody.innerHTML = this.productos.map(p => {
  const stockBajo = p.stock <= p.stock_alerta;
+ const vendePiezas = (p.piezas_por_caja || 0) > 0;
+ const piezasSueltas = p.stock_piezas_sueltas || 0;
+ const totalPiezas = vendePiezas ? (p.stock * p.piezas_por_caja) + piezasSueltas : 0;
+ const stockBadge = vendePiezas
+ ? `<span class="badge ${stockBajo ? 'badge-danger' : 'badge-success'}">${p.stock}</span>
+ <div style="font-size: 10px; color: var(--text-muted); margin-top: 3px;">
+ ${totalPiezas} pza${piezasSueltas > 0 ? ` (${piezasSueltas} sueltas)` : ''}
+ </div>`
+ : `<span class="badge ${stockBajo ? 'badge-danger' : 'badge-success'}">${p.stock}</span>`;
+ const precioCelda = vendePiezas
+ ? `<div style="color: var(--gold); font-weight: 600;">${App.fmtMoney(p.precio_unitario)}</div>
+ <div style="font-size: 10px; color: var(--text-muted); margin-top: 2px;">
+ ${App.fmtMoney(p.precio_pieza)} / pza${p.precio_pieza_promo ? ' ★' : ''}
+ </div>`
+ : `<span style="color: var(--gold); font-weight: 600;">${App.fmtMoney(p.precio_unitario)}</span>`;
  return `
  <tr>
  <td><code style="color: var(--gold-soft);">${App.escape(p.codigo)}</code></td>
  <td>
  <div style="font-weight: 600;">${App.escape(p.nombre)}</div>
+ ${vendePiezas ? `<div style="font-size: 10px; color: var(--text-muted);">📦 Caja de ${p.piezas_por_caja} pza</div>` : ''}
  </td>
  <td>${p.categoria ? App.escape(p.categoria.nombre) : '<span class="text-muted">—</span>'}</td>
  <td class="text-right">${App.fmtMoney(p.costo)}</td>
- <td class="text-right" style="color: var(--gold); font-weight: 600;">${App.fmtMoney(p.precio_unitario)}</td>
- <td class="text-center">
- <span class="badge ${stockBajo ? 'badge-danger' : 'badge-success'}">${p.stock}</span>
- </td>
+ <td class="text-right">${precioCelda}</td>
+ <td class="text-center">${stockBadge}</td>
  <td>
  <div class="row-actions">
  <button class="btn btn-icon" title="Editar"
@@ -225,7 +239,8 @@ App.views.productos = {
  </div>
  <div class="form-group">
  <label class="form-label">Precio de Venta *</label>
- <input class="form-input" id="fPrecio" type="number" step="0.01" value="${p.precio_unitario || 0}">
+ <input class="form-input" id="fPrecio" type="number" step="0.01" value="${p.precio_unitario || 0}"
+ oninput="App.views.productos._recalcularPrecioPieza()">
  </div>
  </div>
  <div class="form-grid cols-2">
@@ -236,6 +251,59 @@ App.views.productos = {
  <div class="form-group">
  <label class="form-label">Alerta de Stock</label>
  <input class="form-input" id="fStockAlerta" type="number" value="${p.stock_alerta || 5}">
+ </div>
+ </div>
+
+ <!-- ============ Sección: Venta por piezas ============ -->
+ <div style="border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 14px; margin-top: 10px; background: var(--surface-alt);">
+ <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; user-select: none;">
+ <input type="checkbox" id="fVendePorPiezas"
+ ${(p.piezas_por_caja || 0) > 0 ? 'checked' : ''}
+ onchange="App.views.productos._togglePiezas()"
+ style="width: 18px; height: 18px; cursor: pointer;">
+ <div>
+ <div style="font-weight: 600;">Se vende también por piezas</div>
+ <div style="font-size: 11px; color: var(--text-muted);">Para productos como cajas de lambrín, pisos, etc.</div>
+ </div>
+ </label>
+
+ <div id="bloquePiezas" style="display: ${(p.piezas_por_caja || 0) > 0 ? 'block' : 'none'}; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--border);">
+ <div class="form-grid cols-2">
+ <div class="form-group">
+ <label class="form-label">Piezas por caja *</label>
+ <input class="form-input" id="fPiezasPorCaja" type="number" min="1"
+ value="${p.piezas_por_caja || ''}"
+ oninput="App.views.productos._recalcularPrecioPieza()"
+ placeholder="Ej. 10">
+ </div>
+ <div class="form-group">
+ <label class="form-label">Piezas sueltas disponibles</label>
+ <input class="form-input" id="fStockPiezasSueltas" type="number" min="0"
+ value="${p.stock_piezas_sueltas || 0}">
+ <div style="font-size: 10px; color: var(--text-muted); margin-top: 3px;">Piezas que quedaron de cajas abiertas</div>
+ </div>
+ </div>
+
+ <div class="form-group">
+ <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 13px;">
+ <input type="checkbox" id="fPrecioPiezaPromo"
+ ${p.precio_pieza_promo ? 'checked' : ''}
+ onchange="App.views.productos._togglePrecioPromo()"
+ style="cursor: pointer;">
+ <span>Precio promocional por pieza (manual)</span>
+ </label>
+ </div>
+
+ <div class="form-group">
+ <label class="form-label">Precio por pieza</label>
+ <input class="form-input" id="fPrecioPieza" type="number" step="0.01" min="0"
+ value="${p.precio_pieza || 0}"
+ ${p.precio_pieza_promo ? '' : 'readonly'}
+ style="${p.precio_pieza_promo ? '' : 'background: var(--surface-alt); cursor: not-allowed; opacity: 0.7;'}">
+ <div id="fHintPrecioPieza" style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">
+ ${p.precio_pieza_promo ? '✏️ Modo promocional: edita el precio manualmente' : '⚙️ Cálculo automático: precio de caja ÷ piezas por caja'}
+ </div>
+ </div>
  </div>
  </div>
  `,
@@ -250,15 +318,45 @@ App.views.productos = {
  },
 
  async guardar(id) {
+ const vendePorPiezas = document.getElementById('fVendePorPiezas')?.checked;
+ const piezasPorCaja = vendePorPiezas
+ ? parseInt(document.getElementById('fPiezasPorCaja').value) || 0
+ : 0;
+ const stockPiezasSueltas = vendePorPiezas
+ ? parseInt(document.getElementById('fStockPiezasSueltas').value) || 0
+ : 0;
+ const precioPiezaPromo = vendePorPiezas
+ ? !!document.getElementById('fPrecioPiezaPromo')?.checked
+ : false;
+ const precioCaja = parseFloat(document.getElementById('fPrecio').value) || 0;
+ let precioPieza = 0;
+ if (vendePorPiezas) {
+ if (precioPiezaPromo) {
+ precioPieza = parseFloat(document.getElementById('fPrecioPieza').value) || 0;
+ } else if (piezasPorCaja > 0) {
+ precioPieza = precioCaja / piezasPorCaja;
+ }
+ }
+
+ if (vendePorPiezas && piezasPorCaja < 1) {
+ App.toast('Indica cuántas piezas trae cada caja', 'warning');
+ return;
+ }
+
  const data = {
  codigo: document.getElementById('fCodigo').value.trim(),
  nombre: document.getElementById('fNombre').value.trim(),
  categoria_id: parseInt(document.getElementById('fCategoria').value) || null,
  costo: parseFloat(document.getElementById('fCosto').value) || 0,
- precio_unitario: parseFloat(document.getElementById('fPrecio').value) || 0,
+ precio_unitario: precioCaja,
  stock: parseInt(document.getElementById('fStock').value) || 0,
  stock_alerta: parseInt(document.getElementById('fStockAlerta').value) || 5,
+ piezas_por_caja: piezasPorCaja,
+ precio_pieza: precioPieza,
+ precio_pieza_promo: precioPiezaPromo,
+ stock_piezas_sueltas: stockPiezasSueltas,
  };
+
  if (!data.codigo || !data.nombre) {
  App.toast('Código y nombre son requeridos', 'warning');
  return;
@@ -275,6 +373,49 @@ App.views.productos = {
  await this.cargar();
  } catch (e) {
  App.toast(e.message, 'error');
+ }
+ },
+
+ _togglePiezas() {
+ const cb = document.getElementById('fVendePorPiezas');
+ const bloque = document.getElementById('bloquePiezas');
+ if (!cb || !bloque) return;
+ bloque.style.display = cb.checked ? 'block' : 'none';
+ if (cb.checked) {
+ this._recalcularPrecioPieza();
+ }
+ },
+
+ _togglePrecioPromo() {
+ const cb = document.getElementById('fPrecioPiezaPromo');
+ const input = document.getElementById('fPrecioPieza');
+ const hint = document.getElementById('fHintPrecioPieza');
+ if (!cb || !input) return;
+ if (cb.checked) {
+ input.readOnly = false;
+ input.style.cssText = '';
+ if (hint) hint.innerHTML = '✏️ Modo promocional: edita el precio manualmente';
+ } else {
+ input.readOnly = true;
+ input.style.cssText = 'background: var(--surface-alt); cursor: not-allowed; opacity: 0.7;';
+ if (hint) hint.innerHTML = '⚙️ Cálculo automático: precio de caja ÷ piezas por caja';
+ this._recalcularPrecioPieza();
+ }
+ },
+
+ _recalcularPrecioPieza() {
+ const cb = document.getElementById('fVendePorPiezas');
+ if (!cb?.checked) return;
+ const promo = document.getElementById('fPrecioPiezaPromo')?.checked;
+ if (promo) return; // En modo manual no recalculamos
+ const precioCaja = parseFloat(document.getElementById('fPrecio')?.value) || 0;
+ const piezas = parseInt(document.getElementById('fPiezasPorCaja')?.value) || 0;
+ const inputPP = document.getElementById('fPrecioPieza');
+ if (!inputPP) return;
+ if (piezas > 0) {
+ inputPP.value = (precioCaja / piezas).toFixed(2);
+ } else {
+ inputPP.value = '0.00';
  }
  },
 

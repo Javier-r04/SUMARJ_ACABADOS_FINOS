@@ -126,14 +126,22 @@ App.views.ventas = {
  // (porque al editar el stock se devolverá y se aplicará de nuevo)
  this.editCarrito = venta.detalles.map(d => {
  const prod = this.productos.find(p => p.id === d.producto_id);
- if (prod) {
- // El stock "real disponible" para este item = stock actual + cantidad ya vendida
- return {
- producto: { ...prod, stock: prod.stock + d.cantidad },
- cantidad: d.cantidad,
- };
+ if (!prod) return null;
+ const unidad = d.unidad_venta || 'caja';
+ // Devolvemos al stock visible lo que esta venta ya tenía descontado,
+ // para que al re-editar el usuario vea como disponible "stock_actual + lo de esta venta"
+ const stockAjustado = { ...prod };
+ if (unidad === 'caja') {
+ stockAjustado.stock = (prod.stock || 0) + d.cantidad;
+ } else {
+ // Para piezas: aumentamos stock_piezas_sueltas
+ stockAjustado.stock_piezas_sueltas = (prod.stock_piezas_sueltas || 0) + d.cantidad;
  }
- return null;
+ return {
+ producto: stockAjustado,
+ cantidad: d.cantidad,
+ unidad_venta: unidad,
+ };
  }).filter(Boolean);
 
  this.editCliente = venta.cliente || '';
@@ -268,20 +276,36 @@ App.views.ventas = {
  _agregarItem(id) {
  const prod = this.productos.find(p => p.id === id);
  if (!prod) return;
+ // Por defecto agrega como "caja". El usuario puede cambiar la unidad
+ // en el detalle del carrito mediante el selector inline.
+ this._agregarItemFinal(prod, 1, 'caja');
+ },
 
- const exist = this.editCarrito.find(c => c.producto.id === id);
+ _cambiarUnidadItem(idx, nuevaUnidad) {
+ const item = this.editCarrito[idx];
+ if (!item) return;
+ if ((item.unidad_venta || 'caja') === nuevaUnidad) return;
+ item.unidad_venta = nuevaUnidad;
+ // Recalcular precio según unidad
+ const prod = item.producto;
+ item.producto.precio_unitario_actual = nuevaUnidad === 'pieza'
+ ? Number(prod.precio_pieza)
+ : Number(prod.precio_unitario);
+ this._renderEditCarrito();
+ },
+
+ _agregarItemFinal(prod, cantidad, unidad) {
+ const exist = this.editCarrito.find(c =>
+ c.producto.id === prod.id && (c.unidad_venta || 'caja') === unidad
+ );
  if (exist) {
- if (exist.cantidad >= exist.producto.stock) {
- App.toast(`Stock máximo: ${exist.producto.stock}`, 'warning');
- return;
- }
- exist.cantidad++;
+ exist.cantidad += cantidad;
  } else {
- if (prod.stock <= 0) {
- App.toast('Producto sin stock', 'warning');
- return;
- }
- this.editCarrito.push({ producto: { ...prod }, cantidad: 1 });
+ this.editCarrito.push({
+ producto: { ...prod },
+ cantidad: cantidad,
+ unidad_venta: unidad,
+ });
  }
  const buscar = document.getElementById('editVentaBuscarProd');
  if (buscar) buscar.value = '';
@@ -347,29 +371,62 @@ App.views.ventas = {
  return;
  }
  let total = 0;
- tbody.innerHTML = this.editCarrito.map(it => {
- const sub = it.cantidad * Number(it.producto.precio_unitario);
+ tbody.innerHTML = this.editCarrito.map((it, idx) => {
+ const unidad = it.unidad_venta || 'caja';
+ const vendePiezas = (it.producto.piezas_por_caja || 0) > 0;
+ const precioUnit = unidad === 'pieza'
+ ? Number(it.producto.precio_pieza)
+ : Number(it.producto.precio_unitario);
+ const sub = it.cantidad * precioUnit;
  total += sub;
+
+ // Selector de unidad: solo aparece si el producto admite venta por piezas
+ const selectorUnidad = vendePiezas ? `
+ <select onchange="App.views.ventas._cambiarUnidadItem(${idx}, this.value)"
+ style="background: var(--surface-alt); border: 1px solid var(--border); border-radius: 4px; padding: 3px 6px; font-size: 11px; color: inherit; margin-top: 4px; cursor: pointer;">
+ <option value="caja" ${unidad === 'caja' ? 'selected' : ''}>📦 Caja</option>
+ <option value="pieza" ${unidad === 'pieza' ? 'selected' : ''}>🧱 Pieza</option>
+ </select>
+ ` : `<div style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">📦 Por unidad</div>`;
+
  return `
  <tr>
  <td>
  <div style="font-weight: 600;">${App.escape(it.producto.nombre)}</div>
  <code style="font-size: 11px; color: var(--text-muted);">${App.escape(it.producto.codigo)}</code>
+ ${selectorUnidad}
  </td>
  <td class="text-center">
- <input type="number" min="1" max="${it.producto.stock}" value="${it.cantidad}"
+ <input type="number" min="1" value="${it.cantidad}"
  class="form-input" style="text-align: center; padding: 6px;"
- onchange="App.views.ventas._cambiarCantidad(${it.producto.id}, this.value)">
+ onchange="App.views.ventas._cambiarCantidadIdx(${idx}, this.value)">
  </td>
- <td class="text-right">${App.fmtMoney(it.producto.precio_unitario)}</td>
+ <td class="text-right">${App.fmtMoney(precioUnit)}</td>
  <td class="text-right" style="color: var(--gold); font-weight: 600;">${App.fmtMoney(sub)}</td>
  <td>
- <button class="btn btn-icon danger" onclick="App.views.ventas._eliminarItem(${it.producto.id})">×</button>
+ <button class="btn btn-icon danger" onclick="App.views.ventas._eliminarItemIdx(${idx})">×</button>
  </td>
  </tr>
  `;
  }).join('');
  document.getElementById('editVentaTotal').innerHTML = App.fmtMoneyHtml(total);
+ },
+
+ _cambiarCantidadIdx(idx, valor) {
+ const item = this.editCarrito[idx];
+ if (!item) return;
+ const v = parseInt(valor, 10);
+ if (isNaN(v) || v <= 0) {
+ this._eliminarItemIdx(idx);
+ return;
+ }
+ item.cantidad = v;
+ this._renderEditCarrito();
+ },
+
+ _eliminarItemIdx(idx) {
+ this.editCarrito.splice(idx, 1);
+ this._renderEditCarrito();
  },
 
  async _guardarEdicion() {
@@ -387,6 +444,7 @@ App.views.ventas = {
  items: this.editCarrito.map(c => ({
  producto_id: c.producto.id,
  cantidad: c.cantidad,
+ unidad_venta: c.unidad_venta || 'caja',
  })),
  },
  });

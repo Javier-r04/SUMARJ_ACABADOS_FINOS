@@ -17,6 +17,11 @@ from app.models.models import (
     Venta,
     VentaDetalle,
 )
+from app.routers.productos import (
+    descontar_stock,
+    precio_para_unidad,
+    validar_stock_disponible,
+)
 from app.schemas.schemas import CotizacionCreate, CotizacionOut
 
 router = APIRouter(prefix="/api/cotizaciones", tags=["cotizaciones"])
@@ -98,12 +103,13 @@ def crear(
         raise HTTPException(status_code=400, detail="La cotizacion debe tener al menos un producto")
 
     # Validar productos (sin descontar stock todavia)
-    productos: list[tuple[Producto, int]] = []
+    productos: list[tuple[Producto, int, str]] = []
     for item in payload.items:
         prod = db.query(Producto).filter(Producto.id == item.producto_id).first()
         if not prod:
             raise HTTPException(status_code=400, detail=f"Producto {item.producto_id} no existe")
-        productos.append((prod, item.cantidad))
+        unidad = item.unidad_venta or "caja"
+        productos.append((prod, item.cantidad, unidad))
 
     folio = _gen_folio_cot(db)
     cot = Cotizacion(
@@ -123,8 +129,8 @@ def crear(
 
     subtotal_calc = Decimal("0")
     cantidad_items = 0
-    for prod, cant in productos:
-        precio = prod.precio_unitario
+    for prod, cant, unidad in productos:
+        precio = precio_para_unidad(prod, unidad)
         sub = precio * cant
         det = CotizacionDetalle(
             cotizacion_id=cot.id,
@@ -134,6 +140,7 @@ def crear(
             cantidad=cant,
             precio_unitario=precio,
             subtotal=sub,
+            unidad_venta=unidad,
         )
         db.add(det)
         subtotal_calc += sub
@@ -173,14 +180,16 @@ def aceptar(
     if cot.estado != "pendiente":
         raise HTTPException(status_code=400, detail=f"La cotizacion ya esta {cot.estado}")
 
+    # Validar stock con helpers para soportar caja/pieza
     for det in cot.detalles:
         if det.producto_id:
             prod = db.query(Producto).filter(Producto.id == det.producto_id).first()
-            if not prod or prod.stock < det.cantidad:
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"Stock insuficiente para {det.nombre} (disponible: {prod.stock if prod else 0})",
-                )
+            unidad_det = det.unidad_venta or "caja"
+            if not prod:
+                raise HTTPException(status_code=400, detail=f"Producto eliminado: {det.nombre}")
+            ok, msg = validar_stock_disponible(prod, det.cantidad, unidad_det)
+            if not ok:
+                raise HTTPException(status_code=400, detail=msg)
 
     folio_venta = _gen_folio_venta(db)
     venta = Venta(
@@ -197,8 +206,9 @@ def aceptar(
     db.add(venta)
     db.flush()
 
-    # Crear detalles de venta y descontar stock
+    # Crear detalles de venta y descontar stock (caja/pieza)
     for det in cot.detalles:
+        unidad_det = det.unidad_venta or "caja"
         ventadet = VentaDetalle(
             venta_id=venta.id,
             producto_id=det.producto_id,
@@ -207,12 +217,13 @@ def aceptar(
             cantidad=det.cantidad,
             precio_unitario=det.precio_unitario,
             subtotal=det.subtotal,
+            unidad_venta=unidad_det,
         )
         db.add(ventadet)
         if det.producto_id:
             prod = db.query(Producto).filter(Producto.id == det.producto_id).first()
             if prod:
-                prod.stock = max(0, prod.stock - det.cantidad)
+                descontar_stock(prod, det.cantidad, unidad_det)
 
     cot.estado = "aceptada"
     cot.venta_id = venta.id

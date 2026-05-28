@@ -82,6 +82,10 @@ class ProductoBase(BaseModel):
     precio_unitario: Decimal = Decimal("0")
     stock: int = 0
     stock_alerta: int = 5
+    piezas_por_caja: int = 0
+    precio_pieza: Decimal = Decimal("0")
+    precio_pieza_promo: bool = False
+    stock_piezas_sueltas: int = 0
 
 
 class ProductoCreate(ProductoBase):
@@ -97,6 +101,10 @@ class ProductoUpdate(BaseModel):
     stock: Optional[int] = None
     stock_alerta: Optional[int] = None
     activo: Optional[bool] = None
+    piezas_por_caja: Optional[int] = None
+    precio_pieza: Optional[Decimal] = None
+    precio_pieza_promo: Optional[bool] = None
+    stock_piezas_sueltas: Optional[int] = None
 
 
 class ProductoOut(ProductoBase):
@@ -136,6 +144,7 @@ class ProveedorOut(ProveedorBase):
 class ItemCarrito(BaseModel):
     producto_id: int
     cantidad: int = Field(gt=0)
+    unidad_venta: str = Field(default="caja", pattern="^(caja|pieza)$")
 
 
 class VentaCreate(BaseModel):
@@ -162,6 +171,7 @@ class VentaDetalleOut(BaseModel):
     cantidad: int
     precio_unitario: Decimal
     subtotal: Decimal
+    unidad_venta: str = "caja"
 
 
 class VentaOut(BaseModel):
@@ -271,6 +281,7 @@ class CotizacionDetalleOut(BaseModel):
     cantidad: int
     precio_unitario: Decimal
     subtotal: Decimal
+    unidad_venta: str = "caja"
 
 
 class CotizacionOut(BaseModel):

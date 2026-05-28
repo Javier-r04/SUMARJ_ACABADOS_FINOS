@@ -10,6 +10,12 @@ from sqlalchemy.orm import Session, joinedload
 from app.core.database import get_db
 from app.core.security import get_current_user, require_admin
 from app.models.models import Producto, Usuario, Venta, VentaDetalle
+from app.routers.productos import (
+    descontar_stock,
+    devolver_stock,
+    precio_para_unidad,
+    validar_stock_disponible,
+)
 from app.schemas.schemas import VentaCreate, VentaListItem, VentaOut, VentaUpdate
 
 router = APIRouter(prefix="/api/ventas", tags=["ventas"])
@@ -62,20 +68,19 @@ def crear_venta(
     if not payload.items:
         raise HTTPException(status_code=400, detail="La venta debe tener al menos un producto")
 
-    productos: list[tuple[Producto, int]] = []
+    # Validar stock con helpers (soportan caja y pieza)
+    productos: list[tuple[Producto, int, str]] = []
     for item in payload.items:
         prod = db.query(Producto).filter(Producto.id == item.producto_id).first()
         if not prod:
             raise HTTPException(status_code=400, detail=f"Producto {item.producto_id} no existe")
-        if prod.stock < item.cantidad:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Stock insuficiente para {prod.nombre} (disponible: {prod.stock})",
-            )
-        productos.append((prod, item.cantidad))
+        unidad = item.unidad_venta or "caja"
+        ok, msg = validar_stock_disponible(prod, item.cantidad, unidad)
+        if not ok:
+            raise HTTPException(status_code=400, detail=msg)
+        productos.append((prod, item.cantidad, unidad))
 
     folio = _gen_folio(db)
-    # Limitar descuento a 0-40%
     descuento_pct = Decimal(str(payload.descuento_pct or 0))
     if descuento_pct < 0:
         descuento_pct = Decimal("0")
@@ -93,12 +98,12 @@ def crear_venta(
         fecha=datetime.utcnow(),
     )
     db.add(venta)
-    db.flush()  # asigna ID
+    db.flush()
 
     total = Decimal("0")
     cantidad_items = 0
-    for prod, cant in productos:
-        precio = prod.precio_unitario
+    for prod, cant, unidad in productos:
+        precio = precio_para_unidad(prod, unidad)
         sub = precio * cant
         det = VentaDetalle(
             venta_id=venta.id,
@@ -108,9 +113,10 @@ def crear_venta(
             cantidad=cant,
             precio_unitario=precio,
             subtotal=sub,
+            unidad_venta=unidad,
         )
         db.add(det)
-        prod.stock = prod.stock - cant
+        descontar_stock(prod, cant, unidad)
         total += sub
         cantidad_items += cant
 
@@ -146,24 +152,24 @@ def update_venta(
     if venta.anulada:
         raise HTTPException(status_code=400, detail="No se puede editar una venta anulada")
 
-    # 1. Revertir stock de los detalles actuales
+    # 1. Revertir stock de los detalles actuales (usando devolver_stock para soportar piezas)
     for det in venta.detalles:
         if det.producto_id:
             prod = db.query(Producto).filter(Producto.id == det.producto_id).first()
             if prod:
-                prod.stock = prod.stock + det.cantidad
+                devolver_stock(prod, det.cantidad, det.unidad_venta or "caja")
 
-    productos: list[tuple[Producto, int]] = []
+    # Validar nuevos items y stock disponible
+    productos: list[tuple[Producto, int, str]] = []
     for item in payload.items:
         prod = db.query(Producto).filter(Producto.id == item.producto_id).first()
         if not prod:
             raise HTTPException(status_code=400, detail=f"Producto {item.producto_id} no existe")
-        if prod.stock < item.cantidad:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Stock insuficiente para {prod.nombre} (disponible: {prod.stock})",
-            )
-        productos.append((prod, item.cantidad))
+        unidad = item.unidad_venta or "caja"
+        ok, msg = validar_stock_disponible(prod, item.cantidad, unidad)
+        if not ok:
+            raise HTTPException(status_code=400, detail=msg)
+        productos.append((prod, item.cantidad, unidad))
 
     for det in list(venta.detalles):
         db.delete(det)
@@ -183,8 +189,8 @@ def update_venta(
     # 5. Crear nuevos detalles y descontar stock
     total = Decimal("0")
     cantidad_items = 0
-    for prod, cant in productos:
-        precio = prod.precio_unitario
+    for prod, cant, unidad in productos:
+        precio = precio_para_unidad(prod, unidad)
         sub = precio * cant
         det = VentaDetalle(
             venta_id=venta.id,
@@ -194,9 +200,10 @@ def update_venta(
             cantidad=cant,
             precio_unitario=precio,
             subtotal=sub,
+            unidad_venta=unidad,
         )
         db.add(det)
-        prod.stock = prod.stock - cant
+        descontar_stock(prod, cant, unidad)
         total += sub
         cantidad_items += cant
 
@@ -227,12 +234,12 @@ def anular(
     if venta.anulada:
         raise HTTPException(status_code=400, detail="La venta ya estaba anulada")
 
-    # Devolver stock
+    # Devolver stock (usando helper que maneja caja/pieza)
     for det in venta.detalles:
         if det.producto_id:
             prod = db.query(Producto).filter(Producto.id == det.producto_id).first()
             if prod:
-                prod.stock = prod.stock + det.cantidad
+                devolver_stock(prod, det.cantidad, det.unidad_venta or "caja")
 
     venta.anulada = True
     db.commit()

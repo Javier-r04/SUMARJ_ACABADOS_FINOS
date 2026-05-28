@@ -66,6 +66,11 @@ class Producto(Base):
     precio_unitario = Column(Numeric(12, 2), nullable=False, default=0)
     stock = Column(Integer, nullable=False, default=0)
     stock_alerta = Column(Integer, nullable=False, default=5)
+    # Venta por piezas: si piezas_por_caja > 0, el producto se puede vender por caja o por pieza
+    piezas_por_caja = Column(Integer, nullable=False, default=0)
+    precio_pieza = Column(Numeric(12, 2), nullable=False, default=0)
+    precio_pieza_promo = Column(Boolean, nullable=False, default=False)
+    stock_piezas_sueltas = Column(Integer, nullable=False, default=0)
     activo = Column(Boolean, nullable=False, default=True)
     creado_en = Column(DateTime, nullable=False, default=datetime.utcnow)
 
@@ -118,6 +123,8 @@ class VentaDetalle(Base):
     cantidad = Column(Integer, nullable=False, default=0)
     precio_unitario = Column(Numeric(12, 2), nullable=False, default=0)
     subtotal = Column(Numeric(12, 2), nullable=False, default=0)
+    # 'caja' o 'pieza' — define cómo se vendió este item
+    unidad_venta = Column(String(10), nullable=False, default="caja")
 
     venta = relationship("Venta", back_populates="detalles")
 
@@ -192,6 +199,7 @@ class CotizacionDetalle(Base):
     cantidad = Column(Integer, nullable=False, default=0)
     precio_unitario = Column(Numeric(12, 2), nullable=False, default=0)
     subtotal = Column(Numeric(12, 2), nullable=False, default=0)
+    unidad_venta = Column(String(10), nullable=False, default="caja")
 
     cotizacion = relationship("Cotizacion", back_populates="detalles")
 

@@ -1,4 +1,5 @@
 """CRUD de productos."""
+from decimal import Decimal
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -83,6 +84,16 @@ def actualizar(
     if payload.activo is not None:
         prod.activo = payload.activo
 
+    # Venta por piezas (solo admin puede modificar esto — ya está protegido por require_admin)
+    if payload.piezas_por_caja is not None:
+        prod.piezas_por_caja = max(0, payload.piezas_por_caja)
+    if payload.precio_pieza is not None:
+        prod.precio_pieza = payload.precio_pieza
+    if payload.precio_pieza_promo is not None:
+        prod.precio_pieza_promo = payload.precio_pieza_promo
+    if payload.stock_piezas_sueltas is not None:
+        prod.stock_piezas_sueltas = max(0, payload.stock_piezas_sueltas)
+
     db.commit()
     db.refresh(prod)
     return prod
@@ -100,3 +111,94 @@ def eliminar(
     db.delete(prod)
     db.commit()
     return None
+
+
+# ============================================================================
+# HELPERS de stock dual (caja / pieza)
+# ============================================================================
+def validar_stock_disponible(prod: Producto, cantidad: int, unidad: str) -> tuple[bool, str]:
+    """
+    Verifica si hay stock suficiente del producto para la venta solicitada.
+
+    Lógica:
+      - Si unidad == 'caja': hay que tener al menos `cantidad` cajas completas.
+        (Las piezas sueltas NO se convierten automáticamente en cajas.)
+      - Si unidad == 'pieza': se considera el total de piezas disponibles.
+        Total piezas = (stock * piezas_por_caja) + stock_piezas_sueltas
+
+    Retorna (ok, mensaje_error).
+    """
+    if unidad == "caja":
+        if prod.stock < cantidad:
+            return False, f"Stock insuficiente de cajas para {prod.nombre} (disponible: {prod.stock})"
+        return True, ""
+
+    # unidad == 'pieza'
+    if prod.piezas_por_caja <= 0:
+        return False, f"{prod.nombre} no se vende por piezas"
+
+    total_piezas = (prod.stock * prod.piezas_por_caja) + prod.stock_piezas_sueltas
+    if total_piezas < cantidad:
+        return False, f"Stock insuficiente de piezas para {prod.nombre} (disponible: {total_piezas})"
+    return True, ""
+
+
+def descontar_stock(prod: Producto, cantidad: int, unidad: str) -> None:
+    """
+    Descuenta del stock del producto.
+
+    Lógica:
+      - Si unidad == 'caja': descuenta directamente `cantidad` del stock de cajas.
+      - Si unidad == 'pieza':
+          1. Si hay piezas sueltas suficientes → solo de ahí
+          2. Si no, abre cajas adicionales (descontando de stock) y deja el sobrante
+             como stock_piezas_sueltas.
+    """
+    if unidad == "caja":
+        prod.stock = prod.stock - cantidad
+        return
+
+    # unidad == 'pieza'
+    if prod.stock_piezas_sueltas >= cantidad:
+        prod.stock_piezas_sueltas = prod.stock_piezas_sueltas - cantidad
+        return
+
+    # Necesitamos abrir cajas
+    piezas_faltantes = cantidad - prod.stock_piezas_sueltas
+    prod.stock_piezas_sueltas = 0
+
+    cajas_a_abrir = (piezas_faltantes + prod.piezas_por_caja - 1) // prod.piezas_por_caja
+    prod.stock = prod.stock - cajas_a_abrir
+    piezas_de_cajas_abiertas = cajas_a_abrir * prod.piezas_por_caja
+    sobrante = piezas_de_cajas_abiertas - piezas_faltantes
+    prod.stock_piezas_sueltas = sobrante
+
+
+def devolver_stock(prod: Producto, cantidad: int, unidad: str) -> None:
+    """
+    Inverso de descontar_stock: regresa stock cuando se anula/edita una venta.
+
+    Lógica:
+      - Si unidad == 'caja': suma directo a stock de cajas.
+      - Si unidad == 'pieza': suma a piezas sueltas; si éstas alcanzan o superan
+        piezas_por_caja, se consolidan en cajas.
+    """
+    if unidad == "caja":
+        prod.stock = prod.stock + cantidad
+        return
+
+    # unidad == 'pieza'
+    prod.stock_piezas_sueltas = prod.stock_piezas_sueltas + cantidad
+    if prod.piezas_por_caja > 0:
+        cajas_completas = prod.stock_piezas_sueltas // prod.piezas_por_caja
+        if cajas_completas > 0:
+            prod.stock = prod.stock + cajas_completas
+            prod.stock_piezas_sueltas = prod.stock_piezas_sueltas % prod.piezas_por_caja
+
+
+def precio_para_unidad(prod: Producto, unidad: str) -> Decimal:
+    """Devuelve el precio que se debe cobrar según la unidad de venta."""
+    from decimal import Decimal as D
+    if unidad == "caja":
+        return D(str(prod.precio_unitario))
+    return D(str(prod.precio_pieza))

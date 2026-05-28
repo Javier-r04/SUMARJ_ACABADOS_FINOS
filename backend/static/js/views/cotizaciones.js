@@ -233,16 +233,119 @@ App.views.cotizaciones = {
  agregarItem(id) {
  const prod = this.productos.find(p => p.id === id);
  if (!prod) return;
- const exist = this.nueva.items.find(i => i.producto_id === id);
- if (exist) exist.cantidad++;
- else this.nueva.items.push({
- producto_id: id,
+
+ const vendePiezas = (prod.piezas_por_caja || 0) > 0;
+ // Producto simple — flujo original
+ if (!vendePiezas) {
+ this._agregarItemFinal(prod, 1, 'caja');
+ return;
+ }
+
+ // Producto dual — modal selector
+ this._modalUnidadCot(prod);
+ },
+
+ _modalUnidadCot(prod) {
+ const totalPiezas = (prod.stock * prod.piezas_por_caja) + (prod.stock_piezas_sueltas || 0);
+ App.openModal({
+ title: `Agregar: ${prod.nombre}`,
+ body: `
+ <div style="text-align: center; padding: 4px 0 16px;">
+ <div style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-muted); margin-bottom: 4px;">Disponible</div>
+ <div style="font-family: var(--font-display); font-size: 22px; font-weight: 600;">
+ ${prod.stock} cajas · ${totalPiezas} piezas totales
+ </div>
+ </div>
+
+ <div style="font-size: 13px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-muted); font-weight: 600; margin-bottom: 10px;">
+ ¿Cómo cotizar?
+ </div>
+
+ <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 18px;">
+ <button class="btn btn-ghost" id="btnCotCaja"
+ onclick="App.views.cotizaciones._setUnidad('caja')"
+ style="padding: 16px; flex-direction: column; gap: 4px; border: 2px solid var(--gold);">
+ <div style="font-size: 22px;">📦</div>
+ <div style="font-weight: 700;">Por Caja</div>
+ <div style="font-size: 12px; color: var(--gold);">${App.fmtMoney(prod.precio_unitario)}</div>
+ </button>
+ <button class="btn btn-ghost" id="btnCotPieza"
+ onclick="App.views.cotizaciones._setUnidad('pieza')"
+ style="padding: 16px; flex-direction: column; gap: 4px; border: 2px solid transparent;">
+ <div style="font-size: 22px;">🧱</div>
+ <div style="font-weight: 700;">Por Pieza</div>
+ <div style="font-size: 12px; color: var(--gold);">${App.fmtMoney(prod.precio_pieza)}${prod.precio_pieza_promo ? ' ★' : ''}</div>
+ </button>
+ </div>
+
+ <div class="form-group">
+ <label class="form-label">Cantidad</label>
+ <input class="form-input" type="number" id="cotCantidadModal" min="1" value="1"
+ style="font-size: 22px; padding: 14px; text-align: center; font-family: var(--font-display); font-weight: 600;">
+ </div>
+ `,
+ footer: `
+ <button class="btn btn-ghost" onclick="App.closeModal()">Cancelar</button>
+ <button class="btn btn-primary" onclick="App.views.cotizaciones._confirmarAgregarCot(${prod.id})">
+ Agregar a Cotización
+ </button>
+ `,
+ });
+ this._unidadCotSel = 'caja';
+ setTimeout(() => this._actualizarBotonesUnidadCot(), 30);
+ },
+
+ _setUnidad(u) {
+ this._unidadCotSel = u;
+ this._actualizarBotonesUnidadCot();
+ },
+
+ _actualizarBotonesUnidadCot() {
+ const bC = document.getElementById('btnCotCaja');
+ const bP = document.getElementById('btnCotPieza');
+ if (!bC || !bP) return;
+ if (this._unidadCotSel === 'caja') {
+ bC.style.borderColor = 'var(--gold)';
+ bC.style.background = 'rgba(212, 175, 55, 0.08)';
+ bP.style.borderColor = 'transparent';
+ bP.style.background = '';
+ } else {
+ bP.style.borderColor = 'var(--gold)';
+ bP.style.background = 'rgba(212, 175, 55, 0.08)';
+ bC.style.borderColor = 'transparent';
+ bC.style.background = '';
+ }
+ },
+
+ _confirmarAgregarCot(prodId) {
+ const prod = this.productos.find(p => p.id === prodId);
+ if (!prod) return;
+ const cant = parseInt(document.getElementById('cotCantidadModal').value) || 0;
+ if (cant <= 0) {
+ App.toast('Cantidad inválida', 'warning');
+ return;
+ }
+ this._agregarItemFinal(prod, cant, this._unidadCotSel || 'caja');
+ App.closeModal();
+ },
+
+ _agregarItemFinal(prod, cantidad, unidad) {
+ const exist = this.nueva.items.find(i =>
+ i.producto_id === prod.id && (i.unidad_venta || 'caja') === unidad
+ );
+ const precio = unidad === 'pieza' ? Number(prod.precio_pieza) : Number(prod.precio_unitario);
+ if (exist) {
+ exist.cantidad += cantidad;
+ } else {
+ this.nueva.items.push({
+ producto_id: prod.id,
  codigo: prod.codigo,
  nombre: prod.nombre,
- cantidad: 1,
- precio_unitario: Number(prod.precio_unitario) || 0,
+ cantidad: cantidad,
+ precio_unitario: precio || 0,
+ unidad_venta: unidad,
  });
- // Limpiar buscador y refrescar
+ }
  const buscar = document.getElementById('cotBuscarProd');
  if (buscar) buscar.value = '';
  this._filtrarProductos();
@@ -370,6 +473,7 @@ App.views.cotizaciones = {
  items: this.nueva.items.map(i => ({
  producto_id: i.producto_id,
  cantidad: i.cantidad,
+ unidad_venta: i.unidad_venta || 'caja',
  })),
  },
  });

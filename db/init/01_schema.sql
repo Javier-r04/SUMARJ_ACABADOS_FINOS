@@ -59,16 +59,20 @@ CREATE TABLE IF NOT EXISTS categorias (
 -- TABLA: productos
 -- ============================================================================
 CREATE TABLE IF NOT EXISTS productos (
-    id              SERIAL PRIMARY KEY,
-    codigo          VARCHAR(50)  UNIQUE NOT NULL,
-    nombre          VARCHAR(150) NOT NULL,
-    categoria_id    INTEGER REFERENCES categorias(id) ON DELETE SET NULL,
-    costo           NUMERIC(12,2) NOT NULL DEFAULT 0,
-    precio_unitario NUMERIC(12,2) NOT NULL DEFAULT 0,
-    stock           INTEGER NOT NULL DEFAULT 0,
-    stock_alerta    INTEGER NOT NULL DEFAULT 5,
-    activo          BOOLEAN NOT NULL DEFAULT TRUE,
-    creado_en       TIMESTAMP NOT NULL DEFAULT NOW()
+    id                    SERIAL PRIMARY KEY,
+    codigo                VARCHAR(50)  UNIQUE NOT NULL,
+    nombre                VARCHAR(150) NOT NULL,
+    categoria_id          INTEGER REFERENCES categorias(id) ON DELETE SET NULL,
+    costo                 NUMERIC(12,2) NOT NULL DEFAULT 0,
+    precio_unitario       NUMERIC(12,2) NOT NULL DEFAULT 0,
+    stock                 INTEGER NOT NULL DEFAULT 0,
+    stock_alerta          INTEGER NOT NULL DEFAULT 5,
+    piezas_por_caja       INTEGER NOT NULL DEFAULT 0,
+    precio_pieza          NUMERIC(12,2) NOT NULL DEFAULT 0,
+    precio_pieza_promo    BOOLEAN NOT NULL DEFAULT FALSE,
+    stock_piezas_sueltas  INTEGER NOT NULL DEFAULT 0,
+    activo                BOOLEAN NOT NULL DEFAULT TRUE,
+    creado_en             TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
 CREATE INDEX IF NOT EXISTS idx_productos_codigo   ON productos(codigo);
@@ -122,7 +126,8 @@ CREATE TABLE IF NOT EXISTS venta_detalle (
     nombre          VARCHAR(200) NOT NULL DEFAULT '',
     cantidad        INTEGER       NOT NULL DEFAULT 0,
     precio_unitario NUMERIC(12,2) NOT NULL DEFAULT 0,
-    subtotal        NUMERIC(12,2) NOT NULL DEFAULT 0
+    subtotal        NUMERIC(12,2) NOT NULL DEFAULT 0,
+    unidad_venta    VARCHAR(10)   NOT NULL DEFAULT 'caja'
 );
 
 CREATE INDEX IF NOT EXISTS idx_venta_detalle_venta ON venta_detalle(venta_id);
@@ -199,7 +204,8 @@ CREATE TABLE IF NOT EXISTS cotizacion_detalle (
     nombre          VARCHAR(200) NOT NULL DEFAULT '',
     cantidad        INTEGER       NOT NULL DEFAULT 0,
     precio_unitario NUMERIC(12,2) NOT NULL DEFAULT 0,
-    subtotal        NUMERIC(12,2) NOT NULL DEFAULT 0
+    subtotal        NUMERIC(12,2) NOT NULL DEFAULT 0,
+    unidad_venta    VARCHAR(10)   NOT NULL DEFAULT 'caja'
 );
 
 CREATE INDEX IF NOT EXISTS idx_cotizacion_detalle_cotiz ON cotizacion_detalle(cotizacion_id);

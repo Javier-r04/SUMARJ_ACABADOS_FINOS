@@ -119,59 +119,223 @@ App.views.pos = {
  agregarProducto(id) {
  const prod = this.productos.find(p => p.id === id);
  if (!prod) return;
- if (prod.stock <= 0) {
+
+ const vendePiezas = (prod.piezas_por_caja || 0) > 0;
+ const totalPiezas = vendePiezas
+ ? (prod.stock * prod.piezas_por_caja) + (prod.stock_piezas_sueltas || 0)
+ : 0;
+
+ // Stock disponible base
+ if (!vendePiezas && prod.stock <= 0) {
  App.toast('Producto sin stock', 'error');
  return;
  }
- const item = this.carrito.find(c => c.producto.id === id);
- if (item) {
- if (item.cantidad >= prod.stock) {
- App.toast(`Stock máximo alcanzado (${prod.stock})`, 'warning');
+ if (vendePiezas && prod.stock <= 0 && totalPiezas <= 0) {
+ App.toast('Producto sin stock', 'error');
  return;
  }
- item.cantidad++;
+
+ // Producto SIMPLE (sin venta por piezas) — flujo de siempre
+ if (!vendePiezas) {
+ this._agregarItemCarrito(prod, 1, 'caja');
+ return;
+ }
+
+ // Producto con venta DUAL — abrir modal selector
+ this._modalSeleccionUnidad(prod, totalPiezas);
+ },
+
+ _modalSeleccionUnidad(prod, totalPiezas) {
+ const puedeCaja = prod.stock > 0;
+ const puedePieza = totalPiezas > 0;
+
+ App.openModal({
+ title: `Agregar: ${prod.nombre}`,
+ body: `
+ <div style="text-align: center; padding: 4px 0 16px;">
+ <div style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-muted); margin-bottom: 4px;">Disponible</div>
+ <div style="font-family: var(--font-display); font-size: 22px; font-weight: 600;">
+ ${prod.stock} cajas · ${totalPiezas} piezas totales
+ </div>
+ </div>
+
+ <div style="font-size: 13px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-muted); font-weight: 600; margin-bottom: 10px;">
+ ¿Cómo desea venderlo?
+ </div>
+
+ <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 18px;">
+ <button class="btn ${puedeCaja ? 'btn-ghost' : ''}" id="btnUnidCaja"
+ ${puedeCaja ? '' : 'disabled'}
+ onclick="App.views.pos._setUnidad('caja')"
+ style="padding: 16px; flex-direction: column; gap: 4px; border: 2px solid var(--gold); ${puedeCaja ? '' : 'opacity: 0.5;'}">
+ <div style="font-size: 22px;">📦</div>
+ <div style="font-weight: 700;">Por Caja</div>
+ <div style="font-size: 12px; color: var(--gold);">${App.fmtMoney(prod.precio_unitario)}</div>
+ </button>
+ <button class="btn ${puedePieza ? 'btn-ghost' : ''}" id="btnUnidPieza"
+ ${puedePieza ? '' : 'disabled'}
+ onclick="App.views.pos._setUnidad('pieza')"
+ style="padding: 16px; flex-direction: column; gap: 4px; border: 2px solid transparent; ${puedePieza ? '' : 'opacity: 0.5;'}">
+ <div style="font-size: 22px;">🧱</div>
+ <div style="font-weight: 700;">Por Pieza</div>
+ <div style="font-size: 12px; color: var(--gold);">${App.fmtMoney(prod.precio_pieza)}${prod.precio_pieza_promo ? ' ★' : ''}</div>
+ </button>
+ </div>
+
+ <div class="form-group">
+ <label class="form-label">Cantidad</label>
+ <input class="form-input" type="number" id="posCantidadModal" min="1" value="1"
+ style="font-size: 22px; padding: 14px; text-align: center; font-family: var(--font-display); font-weight: 600;">
+ </div>
+ `,
+ footer: `
+ <button class="btn btn-ghost" onclick="App.closeModal()">Cancelar</button>
+ <button class="btn btn-primary" onclick="App.views.pos._confirmarAgregar(${prod.id})" id="btnAgregarUnid">
+ Agregar al Carrito
+ </button>
+ `,
+ });
+
+ // Estado inicial: la caja seleccionada (si se puede)
+ this._unidadSeleccionada = puedeCaja ? 'caja' : 'pieza';
+ setTimeout(() => this._actualizarBotonesUnidad(), 30);
+ },
+
+ _setUnidad(unidad) {
+ this._unidadSeleccionada = unidad;
+ this._actualizarBotonesUnidad();
+ },
+
+ _actualizarBotonesUnidad() {
+ const bCaja = document.getElementById('btnUnidCaja');
+ const bPieza = document.getElementById('btnUnidPieza');
+ if (!bCaja || !bPieza) return;
+ if (this._unidadSeleccionada === 'caja') {
+ bCaja.style.borderColor = 'var(--gold)';
+ bCaja.style.background = 'rgba(212, 175, 55, 0.08)';
+ bPieza.style.borderColor = 'transparent';
+ bPieza.style.background = '';
  } else {
- this.carrito.push({ producto: prod, cantidad: 1 });
+ bPieza.style.borderColor = 'var(--gold)';
+ bPieza.style.background = 'rgba(212, 175, 55, 0.08)';
+ bCaja.style.borderColor = 'transparent';
+ bCaja.style.background = '';
+ }
+ },
+
+ _confirmarAgregar(prodId) {
+ const prod = this.productos.find(p => p.id === prodId);
+ if (!prod) return;
+ const cant = parseInt(document.getElementById('posCantidadModal').value) || 0;
+ if (cant <= 0) {
+ App.toast('Cantidad inválida', 'warning');
+ return;
+ }
+ const unidad = this._unidadSeleccionada || 'caja';
+
+ // Validar stock disponible para esta unidad
+ if (unidad === 'caja') {
+ if (cant > prod.stock) {
+ App.toast(`Solo hay ${prod.stock} cajas disponibles`, 'warning');
+ return;
+ }
+ } else {
+ const totalPiezas = (prod.stock * prod.piezas_por_caja) + (prod.stock_piezas_sueltas || 0);
+ if (cant > totalPiezas) {
+ App.toast(`Solo hay ${totalPiezas} piezas disponibles`, 'warning');
+ return;
+ }
+ }
+
+ this._agregarItemCarrito(prod, cant, unidad);
+ App.closeModal();
+ },
+
+ /**
+  * Agrega un item al carrito. Si ya existe el mismo producto+unidad, suma cantidad.
+  * Si existe el mismo producto pero con OTRA unidad, lo trata como item separado.
+  */
+ _agregarItemCarrito(prod, cantidad, unidad) {
+ const item = this.carrito.find(c => c.producto.id === prod.id && (c.unidad_venta || 'caja') === unidad);
+ if (item) {
+ item.cantidad += cantidad;
+ } else {
+ this.carrito.push({
+ producto: prod,
+ cantidad: cantidad,
+ unidad_venta: unidad,
+ });
  }
  this.renderCarrito();
  },
 
- cambiarCantidad(id, delta) {
- const item = this.carrito.find(c => c.producto.id === id);
+ // Versiones por índice (necesarias porque el mismo producto puede estar en
+ // el carrito 2 veces: una como caja y otra como pieza)
+ cambiarCantidadItem(idx, delta) {
+ const item = this.carrito[idx];
  if (!item) return;
  const nueva = item.cantidad + delta;
  if (nueva <= 0) {
- this.eliminar(id);
+ this.eliminarItem(idx);
  return;
  }
- if (nueva > item.producto.stock) {
- App.toast(`Stock máximo: ${item.producto.stock}`, 'warning');
+ const max = this._maxCantidadDisponible(item);
+ if (nueva > max) {
+ App.toast(`Máximo disponible: ${max}`, 'warning');
  return;
  }
  item.cantidad = nueva;
  this.renderCarrito();
  },
 
- setCantidad(id, valor) {
- const item = this.carrito.find(c => c.producto.id === id);
+ setCantidadItem(idx, valor) {
+ const item = this.carrito[idx];
  if (!item) return;
  const v = parseInt(valor, 10);
  if (isNaN(v) || v <= 0) {
- this.eliminar(id);
+ this.eliminarItem(idx);
  return;
  }
- if (v > item.producto.stock) {
- App.toast(`Stock máximo: ${item.producto.stock}`, 'warning');
- item.cantidad = item.producto.stock;
+ const max = this._maxCantidadDisponible(item);
+ if (v > max) {
+ App.toast(`Máximo disponible: ${max}`, 'warning');
+ item.cantidad = max;
  } else {
  item.cantidad = v;
  }
  this.renderCarrito();
  },
 
- eliminar(id) {
- this.carrito = this.carrito.filter(c => c.producto.id !== id);
+ eliminarItem(idx) {
+ this.carrito.splice(idx, 1);
  this.renderCarrito();
+ },
+
+ /**
+  * Calcula cuántas cajas/piezas puede tener este item considerando
+  * que otros items del carrito ya están consumiendo del mismo producto
+  * en distintas unidades.
+  */
+ _maxCantidadDisponible(item) {
+ const prod = item.producto;
+ const unidad = item.unidad_venta || 'caja';
+ // Sumamos consumo de OTROS items del mismo producto
+ let consumoCajasOtros = 0;
+ let consumoPiezasOtros = 0;
+ this.carrito.forEach((c) => {
+ if (c === item) return;
+ if (c.producto.id !== prod.id) return;
+ if ((c.unidad_venta || 'caja') === 'caja') consumoCajasOtros += c.cantidad;
+ else consumoPiezasOtros += c.cantidad;
+ });
+ if (unidad === 'caja') {
+ return Math.max(0, prod.stock - consumoCajasOtros);
+ }
+ // unidad pieza
+ const totalPiezasDisp = (prod.stock * prod.piezas_por_caja) + (prod.stock_piezas_sueltas || 0);
+ // Cada caja "ya en carrito" reserva piezas_por_caja piezas
+ const piezasReservadasPorCajas = consumoCajasOtros * prod.piezas_por_caja;
+ return Math.max(0, totalPiezasDisp - piezasReservadasPorCajas - consumoPiezasOtros);
  },
 
  limpiarCarrito() {
@@ -198,21 +362,34 @@ App.views.pos = {
  }
 
  let subtotal = 0;
- items.innerHTML = this.carrito.map(({ producto, cantidad }) => {
- const sub = Number(producto.precio_unitario) * cantidad;
+ items.innerHTML = this.carrito.map((item, idx) => {
+ const { producto, cantidad } = item;
+ const unidad = item.unidad_venta || 'caja';
+ const precio = unidad === 'pieza'
+ ? Number(producto.precio_pieza)
+ : Number(producto.precio_unitario);
+ const sub = precio * cantidad;
  subtotal += sub;
+ const etiquetaUnidad = unidad === 'pieza'
+ ? `🧱 Por pieza (${App.fmtMoney(precio)} c/u)`
+ : `📦 Por caja (${App.fmtMoney(precio)} c/u)`;
  return `
  <div class="cart-item">
  <div class="top">
- <div class="name">${App.escape(producto.nombre)}</div>
- <button class="remove" onclick="App.views.pos.eliminar(${producto.id})"></button>
+ <div class="name">
+ ${App.escape(producto.nombre)}
+ <div style="font-size: 10px; color: var(--text-muted); margin-top: 2px; font-weight: normal;">
+ ${etiquetaUnidad}
+ </div>
+ </div>
+ <button class="remove" onclick="App.views.pos.eliminarItem(${idx})"></button>
  </div>
  <div class="bottom">
  <div class="qty-controls">
- <button onclick="App.views.pos.cambiarCantidad(${producto.id}, -1)">−</button>
- <input type="number" value="${cantidad}" min="1" max="${producto.stock}"
- onchange="App.views.pos.setCantidad(${producto.id}, this.value)">
- <button onclick="App.views.pos.cambiarCantidad(${producto.id}, 1)">+</button>
+ <button onclick="App.views.pos.cambiarCantidadItem(${idx}, -1)">−</button>
+ <input type="number" value="${cantidad}" min="1"
+ onchange="App.views.pos.setCantidadItem(${idx}, this.value)">
+ <button onclick="App.views.pos.cambiarCantidadItem(${idx}, 1)">+</button>
  </div>
  <div class="subtotal">${App.fmtMoney(sub)}</div>
  </div>
@@ -263,9 +440,14 @@ App.views.pos = {
  return;
  }
 
- // Calcular el subtotal y aplicar descuento
- const subtotal = this.carrito.reduce((sum, c) =>
- sum + (Number(c.producto.precio_unitario) * c.cantidad), 0);
+ // Calcular el subtotal y aplicar descuento (usando precio según unidad)
+ const subtotal = this.carrito.reduce((sum, c) => {
+ const unidad = c.unidad_venta || 'caja';
+ const precio = unidad === 'pieza'
+ ? Number(c.producto.precio_pieza)
+ : Number(c.producto.precio_unitario);
+ return sum + (precio * c.cantidad);
+ }, 0);
  const pctDesc = this._obtenerDescuento();
  const total = subtotal - (subtotal * pctDesc / 100);
 
@@ -512,6 +694,7 @@ App.views.pos = {
  items: this.carrito.map(c => ({
  producto_id: c.producto.id,
  cantidad: c.cantidad,
+ unidad_venta: c.unidad_venta || 'caja',
  })),
  },
  });
