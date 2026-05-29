@@ -89,7 +89,7 @@ def reporte_avanzado(
         ventas = qv.order_by(Venta.fecha.desc()).all()
         for v in ventas:
             productos_str = ", ".join(
-                [f"{d.cantidad}x {d.nombre}" for d in v.detalles[:3]]
+                [d.nombre for d in v.detalles[:3]]
             )
             if len(v.detalles) > 3:
                 productos_str += f" (+{len(v.detalles) - 3} mas)"
@@ -117,7 +117,7 @@ def reporte_avanzado(
         compras = qc.order_by(Compra.fecha.desc()).all()
         for c in compras:
             productos_str = ", ".join(
-                [f"{d.cantidad}x {d.nombre}" for d in c.detalles[:3]]
+                [d.nombre for d in c.detalles[:3]]
             )
             if len(c.detalles) > 3:
                 productos_str += f" (+{len(c.detalles) - 3} mas)"
