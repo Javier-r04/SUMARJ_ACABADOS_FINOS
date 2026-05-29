@@ -255,100 +255,20 @@ App.views.cotizaciones = {
  agregarItem(id) {
  const prod = this.productos.find(p => p.id === id);
  if (!prod) return;
-
- const vendePiezas = (prod.piezas_por_caja || 0) > 0;
- // Producto simple — flujo original
- if (!vendePiezas) {
+ // Agregar directamente como caja. Si el producto es dual, el usuario
+ // podrá cambiar la unidad en el carrito con el selector inline.
  this._agregarItemFinal(prod, 1, 'caja');
- return;
- }
-
- // Producto dual — modal selector
- this._modalUnidadCot(prod);
  },
 
- _modalUnidadCot(prod) {
- const totalPiezas = (prod.stock * prod.piezas_por_caja) + (prod.stock_piezas_sueltas || 0);
- App.openModal({
- title: `Agregar: ${prod.nombre}`,
- body: `
- <div style="text-align: center; padding: 4px 0 16px;">
- <div style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-muted); margin-bottom: 4px;">Disponible</div>
- <div style="font-family: var(--font-display); font-size: 22px; font-weight: 600;">
- ${prod.stock} cajas · ${totalPiezas} piezas totales
- </div>
- </div>
-
- <div style="font-size: 13px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-muted); font-weight: 600; margin-bottom: 10px;">
- ¿Cómo cotizar?
- </div>
-
- <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 18px;">
- <button class="btn btn-ghost" id="btnCotCaja"
- onclick="App.views.cotizaciones._setUnidad('caja')"
- style="padding: 16px; flex-direction: column; gap: 4px; border: 2px solid var(--gold);">
- <div style="font-size: 22px;">📦</div>
- <div style="font-weight: 700;">Por Caja</div>
- <div style="font-size: 12px; color: var(--gold);">${App.fmtMoney(this._precioCaja(prod))}${this._promoVigente(prod) ? ' ★' : ''}</div>
- </button>
- <button class="btn btn-ghost" id="btnCotPieza"
- onclick="App.views.cotizaciones._setUnidad('pieza')"
- style="padding: 16px; flex-direction: column; gap: 4px; border: 2px solid transparent;">
- <div style="font-size: 22px;">🧱</div>
- <div style="font-weight: 700;">Por Pieza</div>
- <div style="font-size: 12px; color: var(--gold);">${App.fmtMoney(this._precioPieza(prod))}${this._promoVigente(prod) ? ' ★' : ''}</div>
- </button>
- </div>
-
- <div class="form-group">
- <label class="form-label">Cantidad</label>
- <input class="form-input" type="number" id="cotCantidadModal" min="1" value="1"
- style="font-size: 22px; padding: 14px; text-align: center; font-family: var(--font-display); font-weight: 600;">
- </div>
- `,
- footer: `
- <button class="btn btn-ghost" onclick="App.closeModal()">Cancelar</button>
- <button class="btn btn-primary" onclick="App.views.cotizaciones._confirmarAgregarCot(${prod.id})">
- Agregar a Cotización
- </button>
- `,
- });
- this._unidadCotSel = 'caja';
- setTimeout(() => this._actualizarBotonesUnidadCot(), 30);
- },
-
- _setUnidad(u) {
- this._unidadCotSel = u;
- this._actualizarBotonesUnidadCot();
- },
-
- _actualizarBotonesUnidadCot() {
- const bC = document.getElementById('btnCotCaja');
- const bP = document.getElementById('btnCotPieza');
- if (!bC || !bP) return;
- if (this._unidadCotSel === 'caja') {
- bC.style.borderColor = 'var(--gold)';
- bC.style.background = 'rgba(212, 175, 55, 0.08)';
- bP.style.borderColor = 'transparent';
- bP.style.background = '';
- } else {
- bP.style.borderColor = 'var(--gold)';
- bP.style.background = 'rgba(212, 175, 55, 0.08)';
- bC.style.borderColor = 'transparent';
- bC.style.background = '';
- }
- },
-
- _confirmarAgregarCot(prodId) {
- const prod = this.productos.find(p => p.id === prodId);
+ _cambiarUnidadCotItem(idx, nuevaUnidad) {
+ const item = this.nueva.items[idx];
+ if (!item) return;
+ if ((item.unidad_venta || 'caja') === nuevaUnidad) return;
+ const prod = this.productos.find(p => p.id === item.producto_id);
  if (!prod) return;
- const cant = parseInt(document.getElementById('cotCantidadModal').value) || 0;
- if (cant <= 0) {
- App.toast('Cantidad inválida', 'warning');
- return;
- }
- this._agregarItemFinal(prod, cant, this._unidadCotSel || 'caja');
- App.closeModal();
+ item.unidad_venta = nuevaUnidad;
+ item.precio_unitario = this._precioParaUnidad(prod, nuevaUnidad);
+ this.renderItems();
  },
 
  _agregarItemFinal(prod, cantidad, unidad) {
@@ -413,6 +333,20 @@ App.views.cotizaciones = {
  this.renderItems();
  },
 
+ // Versiones por índice (necesarias para productos duales que pueden estar
+ // como caja y como pieza al mismo tiempo en el mismo carrito)
+ cambiarIdx(idx, valor) {
+ const item = this.nueva.items[idx];
+ if (!item) return;
+ item.cantidad = Math.max(1, parseInt(valor) || 1);
+ this.renderItems();
+ },
+
+ eliminarIdx(idx) {
+ this.nueva.items.splice(idx, 1);
+ this.renderItems();
+ },
+
  _recalcularTotal() {
  this.renderItems();
  },
@@ -432,24 +366,38 @@ App.views.cotizaciones = {
  }
 
  let subtotal = 0;
- tbody.innerHTML = this.nueva.items.map(it => {
+ tbody.innerHTML = this.nueva.items.map((it, idx) => {
+ const prod = this.productos.find(p => p.id === it.producto_id);
+ const vendePiezas = prod && (prod.piezas_por_caja || 0) > 0;
+ const unidad = it.unidad_venta || 'caja';
  const sub = it.cantidad * it.precio_unitario;
  subtotal += sub;
+
+ // Selector de unidad inline si el producto admite venta dual
+ const selectorUnidad = vendePiezas ? `
+ <select onchange="App.views.cotizaciones._cambiarUnidadCotItem(${idx}, this.value)"
+ style="background: var(--surface-alt); border: 1px solid var(--border); border-radius: 4px; padding: 3px 6px; font-size: 11px; color: inherit; margin-top: 4px; cursor: pointer;">
+ <option value="caja" ${unidad === 'caja' ? 'selected' : ''}>📦 Caja</option>
+ <option value="pieza" ${unidad === 'pieza' ? 'selected' : ''}>🧱 Pieza</option>
+ </select>
+ ` : '';
+
  return `
  <tr>
  <td>
  <div style="font-weight: 600;">${App.escape(it.nombre)}</div>
  <code style="font-size: 11px; color: var(--text-muted);">${App.escape(it.codigo)}</code>
+ ${selectorUnidad}
  </td>
  <td class="text-center">
  <input type="number" min="1" value="${it.cantidad}"
  class="form-input" style="text-align: center; padding: 6px;"
- onchange="App.views.cotizaciones.cambiar(${it.producto_id}, this.value)">
+ onchange="App.views.cotizaciones.cambiarIdx(${idx}, this.value)">
  </td>
  <td class="text-right">${App.fmtMoney(it.precio_unitario)}</td>
  <td class="text-right" style="color: var(--gold); font-weight: 600;">${App.fmtMoney(sub)}</td>
  <td>
- <button class="btn btn-icon danger" onclick="App.views.cotizaciones.eliminar_item(${it.producto_id})">×</button>
+ <button class="btn btn-icon danger" onclick="App.views.cotizaciones.eliminarIdx(${idx})">×</button>
  </td>
  </tr>
  `;
