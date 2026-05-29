@@ -108,10 +108,28 @@ App.views.productos = {
  </div>`
  : `<span class="badge ${stockBajo ? 'badge-danger' : 'badge-success'}">${p.stock}</span>`;
  const precioCelda = vendePiezas
- ? `<div style="color: var(--gold); font-weight: 600;">${App.fmtMoney(p.precio_unitario)}</div>
+ ? (() => {
+ // Detectar si hay promo vigente y mostrar fecha de fin
+ let badgePromo = '';
+ if (p.precio_pieza_promo) {
+ if (p.promo_fin) {
+ const fin = new Date(p.promo_fin);
+ const hoy = new Date();
+ const vigente = fin > hoy;
+ if (vigente) {
+ const fechaFmt = fin.toLocaleDateString('es-MX', { day: '2-digit', month: '2-digit', year: '2-digit' });
+ badgePromo = ` <span style="display: inline-block; padding: 1px 5px; background: rgba(212, 175, 55, 0.15); color: var(--gold); border-radius: 3px; font-size: 9px; font-weight: 600;">★ hasta ${fechaFmt}</span>`;
+ }
+ } else {
+ // Promo sin vigencia (indefinida)
+ badgePromo = ' ★';
+ }
+ }
+ return `<div style="color: var(--gold); font-weight: 600;">${App.fmtMoney(p.precio_unitario)}</div>
  <div style="font-size: 10px; color: var(--text-muted); margin-top: 2px;">
- ${App.fmtMoney(p.precio_pieza)} / pza${p.precio_pieza_promo ? ' ★' : ''}
- </div>`
+ ${App.fmtMoney(p.precio_pieza)} / pza${badgePromo}
+ </div>`;
+ })()
  : `<span style="color: var(--gold); font-weight: 600;">${App.fmtMoney(p.precio_unitario)}</span>`;
  return `
  <tr>
@@ -304,6 +322,37 @@ App.views.productos = {
  ${p.precio_pieza_promo ? '✏️ Modo promocional: edita el precio manualmente' : '⚙️ Cálculo automático: precio de caja ÷ piezas por caja'}
  </div>
  </div>
+
+ <!-- Vigencia de la promoción -->
+ <div id="bloqueVigencia" style="display: ${p.precio_pieza_promo ? 'block' : 'none'}; padding: 10px 12px; background: rgba(212, 175, 55, 0.05); border: 1px dashed var(--gold); border-radius: 4px; margin-top: 8px;">
+ <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 13px;">
+ <input type="checkbox" id="fVigenciaActiva"
+ ${p.promo_fin ? 'checked' : ''}
+ onchange="App.views.productos._toggleVigencia()"
+ style="cursor: pointer;">
+ <span>⏰ Vigencia limitada</span>
+ </label>
+ <div id="bloqueVigenciaInputs" style="display: ${p.promo_fin ? 'block' : 'none'}; margin-top: 10px;">
+ <div class="form-grid cols-2" style="gap: 10px;">
+ <div>
+ <label class="form-label" style="font-size: 11px;">Días de duración *</label>
+ <input class="form-input" id="fPromoDias" type="number" min="1" max="365"
+ value="${p.promo_fin ? '' : '7'}"
+ placeholder="Ej. 7"
+ oninput="App.views.productos._previewFechaFin()">
+ </div>
+ <div>
+ <label class="form-label" style="font-size: 11px;">Termina el</label>
+ <div id="fFechaFinPreview" style="padding: 8px 10px; background: var(--surface-alt); border-radius: 4px; font-size: 13px; font-weight: 600; color: var(--gold);">
+ ${p.promo_fin ? new Date(p.promo_fin).toLocaleDateString('es-MX', { day: '2-digit', month: '2-digit', year: '2-digit' }) : '—'}
+ </div>
+ </div>
+ </div>
+ <div style="font-size: 10px; color: var(--text-muted); margin-top: 6px;">
+ ⚙️ Al expirar, el sistema vuelve automáticamente al cálculo normal (precio caja ÷ piezas).
+ </div>
+ </div>
+ </div>
  </div>
  </div>
  `,
@@ -338,8 +387,19 @@ App.views.productos = {
  }
  }
 
+ // Vigencia de la promoción
+ const vigenciaActiva = precioPiezaPromo && !!document.getElementById('fVigenciaActiva')?.checked;
+ const promoDias = vigenciaActiva
+ ? parseInt(document.getElementById('fPromoDias')?.value) || 0
+ : 0;
+ const promoLimpiar = !vigenciaActiva; // Si no hay vigencia activa, borrar fechas
+
  if (vendePorPiezas && piezasPorCaja < 1) {
  App.toast('Indica cuántas piezas trae cada caja', 'warning');
+ return;
+ }
+ if (vigenciaActiva && promoDias < 1) {
+ App.toast('Indica cuántos días dura la promoción', 'warning');
  return;
  }
 
@@ -355,6 +415,8 @@ App.views.productos = {
  precio_pieza: precioPieza,
  precio_pieza_promo: precioPiezaPromo,
  stock_piezas_sueltas: stockPiezasSueltas,
+ promo_dias: promoDias,
+ promo_limpiar: promoLimpiar,
  };
 
  if (!data.codigo || !data.nombre) {
@@ -390,17 +452,52 @@ App.views.productos = {
  const cb = document.getElementById('fPrecioPiezaPromo');
  const input = document.getElementById('fPrecioPieza');
  const hint = document.getElementById('fHintPrecioPieza');
+ const bloqueVig = document.getElementById('bloqueVigencia');
  if (!cb || !input) return;
  if (cb.checked) {
  input.readOnly = false;
  input.style.cssText = '';
  if (hint) hint.innerHTML = '✏️ Modo promocional: edita el precio manualmente';
+ if (bloqueVig) bloqueVig.style.display = 'block';
  } else {
  input.readOnly = true;
  input.style.cssText = 'background: var(--surface-alt); cursor: not-allowed; opacity: 0.7;';
  if (hint) hint.innerHTML = '⚙️ Cálculo automático: precio de caja ÷ piezas por caja';
+ if (bloqueVig) bloqueVig.style.display = 'none';
+ // Limpiar checkbox de vigencia también
+ const cbVig = document.getElementById('fVigenciaActiva');
+ if (cbVig) cbVig.checked = false;
+ const bloqueIn = document.getElementById('bloqueVigenciaInputs');
+ if (bloqueIn) bloqueIn.style.display = 'none';
  this._recalcularPrecioPieza();
  }
+ },
+
+ _toggleVigencia() {
+ const cb = document.getElementById('fVigenciaActiva');
+ const bloque = document.getElementById('bloqueVigenciaInputs');
+ if (!cb || !bloque) return;
+ bloque.style.display = cb.checked ? 'block' : 'none';
+ if (cb.checked) {
+ // Si no hay días puestos, default a 7
+ const inp = document.getElementById('fPromoDias');
+ if (inp && !inp.value) inp.value = 7;
+ this._previewFechaFin();
+ }
+ },
+
+ _previewFechaFin() {
+ const inp = document.getElementById('fPromoDias');
+ const preview = document.getElementById('fFechaFinPreview');
+ if (!inp || !preview) return;
+ const dias = parseInt(inp.value) || 0;
+ if (dias <= 0) {
+ preview.textContent = '—';
+ return;
+ }
+ const fin = new Date();
+ fin.setDate(fin.getDate() + dias);
+ preview.textContent = fin.toLocaleDateString('es-MX', { day: '2-digit', month: '2-digit', year: '2-digit' });
  },
 
  _recalcularPrecioPieza() {

@@ -85,6 +85,8 @@ class ProductoBase(BaseModel):
     piezas_por_caja: int = 0
     precio_pieza: Decimal = Decimal("0")
     precio_pieza_promo: bool = False
+    promo_inicio: Optional[datetime] = None
+    promo_fin: Optional[datetime] = None
     stock_piezas_sueltas: int = 0
 
 
@@ -104,6 +106,8 @@ class ProductoUpdate(BaseModel):
     piezas_por_caja: Optional[int] = None
     precio_pieza: Optional[Decimal] = None
     precio_pieza_promo: Optional[bool] = None
+    promo_dias: Optional[int] = None  # Cuántos días dura la promo (0 = sin vigencia)
+    promo_limpiar: Optional[bool] = None  # Si True, borra promo_inicio y promo_fin
     stock_piezas_sueltas: Optional[int] = None
 
 

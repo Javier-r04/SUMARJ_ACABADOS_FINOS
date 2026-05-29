@@ -70,6 +70,8 @@ class Producto(Base):
     piezas_por_caja = Column(Integer, nullable=False, default=0)
     precio_pieza = Column(Numeric(12, 2), nullable=False, default=0)
     precio_pieza_promo = Column(Boolean, nullable=False, default=False)
+    promo_inicio = Column(DateTime, nullable=True)
+    promo_fin = Column(DateTime, nullable=True)
     stock_piezas_sueltas = Column(Integer, nullable=False, default=0)
     activo = Column(Boolean, nullable=False, default=True)
     creado_en = Column(DateTime, nullable=False, default=datetime.utcnow)

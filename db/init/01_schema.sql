@@ -70,6 +70,8 @@ CREATE TABLE IF NOT EXISTS productos (
     piezas_por_caja       INTEGER NOT NULL DEFAULT 0,
     precio_pieza          NUMERIC(12,2) NOT NULL DEFAULT 0,
     precio_pieza_promo    BOOLEAN NOT NULL DEFAULT FALSE,
+    promo_inicio          TIMESTAMP,
+    promo_fin             TIMESTAMP,
     stock_piezas_sueltas  INTEGER NOT NULL DEFAULT 0,
     activo                BOOLEAN NOT NULL DEFAULT TRUE,
     creado_en             TIMESTAMP NOT NULL DEFAULT NOW()

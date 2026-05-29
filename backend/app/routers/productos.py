@@ -91,8 +91,25 @@ def actualizar(
         prod.precio_pieza = payload.precio_pieza
     if payload.precio_pieza_promo is not None:
         prod.precio_pieza_promo = payload.precio_pieza_promo
+        if not payload.precio_pieza_promo:
+            # Al desactivar el promo, limpiar vigencia
+            prod.promo_inicio = None
+            prod.promo_fin = None
     if payload.stock_piezas_sueltas is not None:
         prod.stock_piezas_sueltas = max(0, payload.stock_piezas_sueltas)
+
+    # Vigencia de la promoción
+    if payload.promo_limpiar:
+        prod.promo_inicio = None
+        prod.promo_fin = None
+    elif payload.promo_dias is not None:
+        if payload.promo_dias > 0 and prod.precio_pieza_promo:
+            from datetime import datetime as _dt, timedelta as _td
+            prod.promo_inicio = _dt.utcnow()
+            prod.promo_fin = _dt.utcnow() + _td(days=payload.promo_dias)
+        else:
+            prod.promo_inicio = None
+            prod.promo_fin = None
 
     db.commit()
     db.refresh(prod)
@@ -196,9 +213,37 @@ def devolver_stock(prod: Producto, cantidad: int, unidad: str) -> None:
             prod.stock_piezas_sueltas = prod.stock_piezas_sueltas % prod.piezas_por_caja
 
 
+def promo_vigente(prod: Producto) -> bool:
+    """
+    Determina si el precio promocional sigue vigente.
+    - Si NO está marcada la promo → False.
+    - Si está marcada Y no hay fechas → vigente indefinidamente.
+    - Si está marcada Y hay fechas → solo si hoy está entre promo_inicio y promo_fin.
+    """
+    if not prod.precio_pieza_promo:
+        return False
+    if not prod.promo_fin:
+        # Promo sin vigencia limitada
+        return True
+    from datetime import datetime as _dt
+    ahora = _dt.utcnow()
+    if prod.promo_inicio and ahora < prod.promo_inicio:
+        return False
+    return ahora < prod.promo_fin
+
+
 def precio_para_unidad(prod: Producto, unidad: str) -> Decimal:
-    """Devuelve el precio que se debe cobrar según la unidad de venta."""
+    """
+    Devuelve el precio que se debe cobrar según la unidad de venta.
+    Si la promo ha expirado, devuelve el precio calculado (caja / piezas).
+    """
     from decimal import Decimal as D
     if unidad == "caja":
         return D(str(prod.precio_unitario))
+    # unidad == 'pieza'
+    if promo_vigente(prod):
+        return D(str(prod.precio_pieza))
+    # Promo expirada o sin promo: usar cálculo automático
+    if prod.piezas_por_caja > 0:
+        return D(str(prod.precio_unitario)) / D(str(prod.piezas_por_caja))
     return D(str(prod.precio_pieza))
