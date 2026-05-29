@@ -347,16 +347,26 @@ App.views.ventas = {
  return;
  }
 
- list.innerHTML = filtrados.map(p => `
+ list.innerHTML = filtrados.map(p => {
+ const enPromo = this._promoVigente(p);
+ const precioEfectivo = this._precioCaja(p);
+ const precioOriginal = Number(p.precio_unitario || 0);
+ const priceHtml = enPromo
+ ? `<div style="font-size: 11px; text-decoration: line-through; color: var(--text-muted);">${App.fmtMoneyHtml(precioOriginal)}</div>
+ <div style="color: var(--gold); font-weight: 700;">${App.fmtMoneyHtml(precioEfectivo)}</div>
+ <div style="font-size: 9px; color: var(--gold);">★ EN PROMO</div>`
+ : App.fmtMoneyHtml(precioEfectivo);
+ return `
  <div class="picker-row" onclick="App.views.ventas._agregarItem(${p.id})">
  <div class="code">${App.escape(p.codigo)}</div>
  <div class="info">
  <div class="name">${App.escape(p.nombre)}</div>
  <div class="stock">Stock: ${p.stock}</div>
  </div>
- <div class="price">${App.fmtMoneyHtml(p.precio_unitario)}</div>
+ <div class="price">${priceHtml}</div>
  </div>
- `).join('');
+ `;
+ }).join('');
  },
 
  _cambiarCantidad(id, valor) {
