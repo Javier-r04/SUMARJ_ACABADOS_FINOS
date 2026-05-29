@@ -521,8 +521,8 @@ App.views.productos = {
  const labelCaja = document.getElementById('fPreviewLabelCaja');
  const nombre = (document.getElementById('fNombre')?.value || 'Producto').trim();
  if (labelCaja) labelCaja.textContent = `${nombre} en promo:`;
- if (previewCaja) previewCaja.textContent = App.fmtMoney(precioPromo);
- if (previewPieza) previewPieza.textContent = App.fmtMoney(piezas > 0 ? precioPromo / piezas : 0);
+ if (previewCaja) previewCaja.innerHTML = App.fmtMoneyHtml(precioPromo);
+ if (previewPieza) previewPieza.innerHTML = App.fmtMoneyHtml(piezas > 0 ? precioPromo / piezas : 0);
  },
 
  _toggleVigencia() {
