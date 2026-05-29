@@ -490,10 +490,10 @@ App.views.reportes = {
  columnStyles = {
  0: { cellWidth: 18, halign: 'center', fontStyle: 'bold' },
  1: { cellWidth: 22, textColor: [160, 130, 30], fontStyle: 'bold' },
- 2: { cellWidth: 55 },
- 3: { cellWidth: 35 },
+ 2: { cellWidth: 50 },
+ 3: { cellWidth: 30 },
  4: { cellWidth: 24 },
- 5: { cellWidth: 'auto', halign: 'right', fontStyle: 'bold' },
+ 5: { cellWidth: 'auto', halign: 'right', fontStyle: 'bold', overflow: 'visible', cellPadding: { left: 2, right: 4, top: 2.5, bottom: 2.5 } },
  };
  } else {
  const clienteHeader = this.filtroTipo === 'ventas' ? 'Cliente' : 'Proveedor';
@@ -507,10 +507,10 @@ App.views.reportes = {
  ]);
  columnStyles = {
  0: { cellWidth: 22, textColor: [160, 130, 30], fontStyle: 'bold' },
- 1: { cellWidth: 72 },
- 2: { cellWidth: 38 },
- 3: { cellWidth: 30 },
- 4: { cellWidth: 'auto', halign: 'right', fontStyle: 'bold', textColor: [160, 130, 30] },
+ 1: { cellWidth: 68 },
+ 2: { cellWidth: 34 },
+ 3: { cellWidth: 28 },
+ 4: { cellWidth: 'auto', halign: 'right', fontStyle: 'bold', textColor: [160, 130, 30], overflow: 'visible', cellPadding: { left: 2, right: 4, top: 2.5, bottom: 2.5 } },
  };
  }
 
@@ -673,63 +673,102 @@ App.views.reportes = {
  }[this.filtroRango] || this.filtroRango;
  doc.text('Rango: ' + rangoLabel, pageW - 14, 24.5, { align: 'right' });
 
- // Resumen general
- doc.setTextColor(40, 40, 40);
- doc.setFont('helvetica', 'bold');
- doc.setFontSize(11);
- doc.text('Resumen del Período', 14, 45);
+ // ====================================================================
+ // KPIs (cajas con métricas resumen)
+ // ====================================================================
+ const kpis = [
+ { label: 'Total Vendido', value: App.fmtMoneyPlain(this.datos.total_general), color: [160, 130, 30] },
+ { label: 'Ventas Realizadas', value: String(this.datos.num_ventas_total), color: [40, 40, 40] },
+ { label: 'Vendedores Activos', value: String(this.datos.num_vendedores), color: [40, 40, 40] },
+ ];
 
- doc.setDrawColor(212, 175, 55);
- doc.line(14, 47, pageW - 14, 47);
-
+ const numKpis = kpis.length;
+ const kpiW = (pageW - 28 - (numKpis - 1) * 4) / numKpis;
+ const kpiY = 42;
+ kpis.forEach((k, i) => {
+ const x = 14 + i * (kpiW + 4);
+ // Fondo
+ doc.setFillColor(252, 250, 245);
+ doc.setDrawColor(220, 220, 200);
+ doc.setLineWidth(0.2);
+ doc.roundedRect(x, kpiY, kpiW, 18, 1.5, 1.5, 'FD');
+ // Etiqueta
+ doc.setTextColor(120, 110, 90);
  doc.setFont('helvetica', 'normal');
- doc.setFontSize(9);
- doc.text(`Total vendido: $${Number(this.datos.total_general).toLocaleString('en-US', { minimumFractionDigits: 2 })}`, 14, 53);
- doc.text(`Ventas realizadas: ${this.datos.num_ventas_total}`, 14, 58);
- doc.text(`Vendedores activos: ${this.datos.num_vendedores}`, 14, 63);
-
- // Tabla principal
- let y = 73;
- doc.setFillColor(40, 40, 40);
- doc.rect(14, y, pageW - 28, 7, 'F');
- doc.setTextColor(212, 175, 55);
+ doc.setFontSize(7);
+ doc.text(k.label.toUpperCase(), x + 3, kpiY + 5);
+ // Valor
+ doc.setTextColor(...k.color);
  doc.setFont('helvetica', 'bold');
- doc.setFontSize(8);
- doc.text('VENDEDOR', 16, y + 5);
- doc.text('USUARIO', 70, y + 5);
- doc.text('VENTAS', 105, y + 5, { align: 'right' });
- doc.text('PROMEDIO', 140, y + 5, { align: 'right' });
- doc.text('TOTAL', 192, y + 5, { align: 'right' });
-
- y += 9;
- doc.setTextColor(40, 40, 40);
- doc.setFont('helvetica', 'normal');
- doc.setFontSize(8);
-
- this.datos.resumen.forEach((v, idx) => {
- if (y > 270) {
- doc.addPage();
- y = 20;
- }
- const medalla = idx === 0 ? '#1 ' : idx === 1 ? '#2 ' : idx === 2 ? '#3 ' : '';
- doc.text(this.truncate(medalla + (v.nombre_completo || ''), 30), 16, y);
- doc.text(this.truncate(v.nombre_usuario || '', 18), 70, y);
- doc.text(String(v.num_ventas), 105, y, { align: 'right' });
- doc.text(`$${Number(v.promedio).toLocaleString('en-US', { minimumFractionDigits: 2 })}`, 140, y, { align: 'right' });
- doc.setFont('helvetica', 'bold');
- doc.text(`$${Number(v.total).toLocaleString('en-US', { minimumFractionDigits: 2 })}`, 192, y, { align: 'right' });
- doc.setFont('helvetica', 'normal');
- y += 6;
+ doc.setFontSize(13);
+ doc.text(k.value, x + 3, kpiY + 13);
  });
 
- // Pie
- doc.setDrawColor(212, 175, 55);
- doc.line(14, y + 2, pageW - 14, y + 2);
+ // ====================================================================
+ // Tabla profesional con autoTable
+ // ====================================================================
+ const filasVend = this.datos.resumen.map((v, idx) => {
+ const medalla = idx === 0 ? '#1' : idx === 1 ? '#2' : idx === 2 ? '#3' : '';
+ const nombre = (medalla ? medalla + '  ' : '') + (v.nombre_completo || '');
+ return [
+ this.truncate(nombre, 28),
+ this.truncate(v.nombre_usuario || '', 18),
+ String(v.num_ventas),
+ App.fmtMoneyPlain(v.promedio),
+ App.fmtMoneyPlain(v.total),
+ ];
+ });
+
+ doc.autoTable({
+ startY: kpiY + 24,
+ head: [['Vendedor', 'Usuario', 'Ventas', 'Promedio', 'Total']],
+ body: filasVend,
+ styles: {
+ fontSize: 8.5,
+ cellPadding: 3,
+ textColor: [40, 40, 40],
+ lineColor: [220, 220, 220],
+ lineWidth: 0.1,
+ },
+ headStyles: {
+ fillColor: [10, 10, 10],
+ textColor: [212, 175, 55],
+ fontStyle: 'bold',
+ fontSize: 8,
+ halign: 'left',
+ },
+ alternateRowStyles: { fillColor: [248, 246, 240] },
+ columnStyles: {
+ 0: { cellWidth: 60, fontStyle: 'bold' },
+ 1: { cellWidth: 40 },
+ 2: { cellWidth: 22, halign: 'center' },
+ 3: { cellWidth: 32, halign: 'right' },
+ 4: { cellWidth: 'auto', halign: 'right', fontStyle: 'bold', textColor: [160, 130, 30], overflow: 'visible', cellPadding: { left: 2, right: 4, top: 3, bottom: 3 } },
+ },
+ didDrawPage: (data) => {
+ // Pie de página
+ const pageH = doc.internal.pageSize.getHeight();
+ doc.setFontSize(7);
+ doc.setTextColor(140, 140, 130);
+ doc.setFont('helvetica', 'normal');
+ doc.text('SUMARJ — Sistema de Gestión', 14, pageH - 8);
+ doc.text(`Página ${data.pageNumber} de ${doc.internal.getNumberOfPages()}`,
+ pageW - 14, pageH - 8, { align: 'right' });
+ },
+ });
+
+ // ====================================================================
+ // Caja TOTAL final
+ // ====================================================================
+ const finalY = doc.lastAutoTable.finalY + 5;
+ doc.setFillColor(10, 10, 10);
+ doc.rect(pageW - 90, finalY, 76, 14, 'F');
+ doc.setTextColor(212, 175, 55);
  doc.setFont('helvetica', 'bold');
  doc.setFontSize(10);
- doc.text('TOTAL GENERAL', 14, y + 8);
- doc.setTextColor(212, 175, 55);
- doc.text(`$${Number(this.datos.total_general).toLocaleString('en-US', { minimumFractionDigits: 2 })}`, 192, y + 8, { align: 'right' });
+ doc.text('TOTAL GENERAL:', pageW - 86, finalY + 8.5);
+ doc.setFontSize(12);
+ doc.text(App.fmtMoneyPlain(this.datos.total_general), pageW - 17, finalY + 8.5, { align: 'right' });
 
  const filename = `reporte_vendedores_${ahora.toISOString().slice(0, 10)}.pdf`;
  doc.save(filename);
