@@ -93,10 +93,12 @@ def reporte_avanzado(
             )
             if len(v.detalles) > 3:
                 productos_str += f" (+{len(v.detalles) - 3} mas)"
+            cantidad_total = sum(d.cantidad for d in v.detalles)
             filas.append(ReporteFila(
                 tipo="venta",
                 folio=v.folio,
                 productos=productos_str,
+                cantidad=cantidad_total,
                 cliente_o_proveedor=v.cliente or "",
                 fecha=v.fecha,
                 total=v.total,
@@ -119,10 +121,12 @@ def reporte_avanzado(
             )
             if len(c.detalles) > 3:
                 productos_str += f" (+{len(c.detalles) - 3} mas)"
+            cantidad_total = sum(d.cantidad for d in c.detalles)
             filas.append(ReporteFila(
                 tipo="compra",
                 folio=c.folio,
                 productos=productos_str,
+                cantidad=cantidad_total,
                 cliente_o_proveedor=c.proveedor_nombre or "",
                 fecha=c.fecha,
                 total=c.total,

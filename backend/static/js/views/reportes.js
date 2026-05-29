@@ -85,6 +85,7 @@ App.views.reportes = {
  <th id="repColTipo" style="display: none;">Tipo</th>
  <th>Folio</th>
  <th>Productos</th>
+ <th class="text-center">Cantidad</th>
  <th id="repColCliente">Cliente</th>
  <th>Fecha</th>
  <th class="text-right">Total</th>
@@ -148,6 +149,7 @@ App.views.reportes = {
  <th id="repColTipo" style="display: none;">Tipo</th>
  <th>Folio</th>
  <th>Productos</th>
+ <th class="text-center">Cantidad</th>
  <th id="repColCliente">Cliente</th>
  <th>Fecha</th>
  <th class="text-right">Total</th>
@@ -214,7 +216,7 @@ App.views.reportes = {
  if (colTipoVC) colTipoVC.style.display = 'none';
  }
 
- const colspan = esBalance ? 6 : 5;
+ const colspan = esBalance ? 7 : 6;
 
  if (this.datos.filas.length === 0) {
  tbody.innerHTML = `<tr class="empty-row"><td colspan="${colspan}">Sin movimientos en el rango seleccionado</td></tr>`;
@@ -243,6 +245,7 @@ App.views.reportes = {
  ${App.escape(f.productos)}
  </div>
  </td>
+ <td class="text-center" style="font-weight: 600; color: var(--text-secondary);">${App.fmtNumber(f.cantidad || 0)}</td>
  <td>${App.escape(f.cliente_o_proveedor)}</td>
  <td>${App.fmtDate(f.fecha)}</td>
  <td class="text-right" style="color: ${colorTotal}; font-weight: 600;">${signo}${App.fmtMoney(f.total)}</td>
@@ -250,7 +253,7 @@ App.views.reportes = {
  `;
  }).join('');
  } catch (e) {
- tbody.innerHTML = `<tr class="empty-row"><td colspan="6">Error: ${App.escape(e.message)}</td></tr>`;
+ tbody.innerHTML = `<tr class="empty-row"><td colspan="7">Error: ${App.escape(e.message)}</td></tr>`;
  }
  },
 
@@ -377,8 +380,14 @@ App.views.reportes = {
  return;
  }
 
+ const esBalanceForPdf = this.filtroTipo === 'balance';
  const { jsPDF } = window.jspdf;
- const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+ // Balance usa landscape porque tiene 7 columnas; ventas/compras siguen en portrait
+ const doc = new jsPDF({
+ orientation: esBalanceForPdf ? 'landscape' : 'portrait',
+ unit: 'mm',
+ format: 'a4'
+ });
  const cfg = App.config || {};
  const pageW = doc.internal.pageSize.getWidth();
 
@@ -475,42 +484,46 @@ App.views.reportes = {
  let head, filas, columnStyles;
  if (esBalance) {
  // Tabla con columna "Tipo"
- head = [['Tipo', 'Folio', 'Productos', 'Cliente / Proveedor', 'Fecha', 'Total']];
+ head = [['Tipo', 'Folio', 'Productos', 'Cantidad', 'Cliente / Proveedor', 'Fecha', 'Total']];
  filas = this.datos.filas.map(f => {
  const esVenta = f.tipo === 'venta';
  return [
  esVenta ? 'VENTA' : 'COMPRA',
  f.folio,
- this.truncate(f.productos, 50),
- this.truncate(f.cliente_o_proveedor, 25),
+ this.truncate(f.productos, 42),
+ String(f.cantidad || 0),
+ this.truncate(f.cliente_o_proveedor, 22),
  App.fmtDate(f.fecha),
  (esVenta ? '+ ' : '- ') + App.fmtMoneyPlain(f.total),
  ];
  });
  columnStyles = {
- 0: { cellWidth: 18, halign: 'center', fontStyle: 'bold' },
+ 0: { cellWidth: 17, halign: 'center', fontStyle: 'bold' },
  1: { cellWidth: 22, textColor: [160, 130, 30], fontStyle: 'bold' },
- 2: { cellWidth: 50 },
- 3: { cellWidth: 30 },
- 4: { cellWidth: 24 },
- 5: { cellWidth: 'auto', halign: 'right', fontStyle: 'bold', overflow: 'visible', cellPadding: { left: 2, right: 4, top: 2.5, bottom: 2.5 } },
+ 2: { cellWidth: 42 },
+ 3: { cellWidth: 18, halign: 'center', fontStyle: 'bold' },
+ 4: { cellWidth: 28 },
+ 5: { cellWidth: 24 },
+ 6: { cellWidth: 'auto', halign: 'right', fontStyle: 'bold', overflow: 'visible', cellPadding: { left: 2, right: 4, top: 2.5, bottom: 2.5 } },
  };
  } else {
  const clienteHeader = this.filtroTipo === 'ventas' ? 'Cliente' : 'Proveedor';
- head = [['Folio', 'Productos', clienteHeader, 'Fecha', 'Total']];
+ head = [['Folio', 'Productos', 'Cantidad', clienteHeader, 'Fecha', 'Total']];
  filas = this.datos.filas.map(f => [
  f.folio,
- this.truncate(f.productos, 60),
- this.truncate(f.cliente_o_proveedor, 30),
+ this.truncate(f.productos, 52),
+ String(f.cantidad || 0),
+ this.truncate(f.cliente_o_proveedor, 26),
  App.fmtDate(f.fecha),
  App.fmtMoneyPlain(f.total),
  ]);
  columnStyles = {
  0: { cellWidth: 22, textColor: [160, 130, 30], fontStyle: 'bold' },
- 1: { cellWidth: 68 },
- 2: { cellWidth: 34 },
- 3: { cellWidth: 28 },
- 4: { cellWidth: 'auto', halign: 'right', fontStyle: 'bold', textColor: [160, 130, 30], overflow: 'visible', cellPadding: { left: 2, right: 4, top: 2.5, bottom: 2.5 } },
+ 1: { cellWidth: 58 },
+ 2: { cellWidth: 20, halign: 'center', fontStyle: 'bold' },
+ 3: { cellWidth: 32 },
+ 4: { cellWidth: 26 },
+ 5: { cellWidth: 'auto', halign: 'right', fontStyle: 'bold', textColor: [160, 130, 30], overflow: 'visible', cellPadding: { left: 2, right: 4, top: 2.5, bottom: 2.5 } },
  };
  }
 
@@ -536,7 +549,7 @@ App.views.reportes = {
  columnStyles: columnStyles,
  // Pintar la columna Total en verde/rojo según tipo (solo balance)
  didParseCell: esBalance ? (data) => {
- if (data.section === 'body' && data.column.index === 5) {
+ if (data.section === 'body' && data.column.index === 6) {
  const tipoFila = data.row.raw[0]; // 'VENTA' o 'COMPRA'
  if (tipoFila === 'VENTA') {
  data.cell.styles.textColor = [40, 130, 40];

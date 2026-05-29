@@ -3,7 +3,7 @@
 // Estrategia: Network-first para API, Cache-first para assets estáticos
 // ===========================================================================
 
-const CACHE_VERSION = 'sumarj-v48';
+const CACHE_VERSION = 'sumarj-v49';
 const APP_SHELL = [
  '/',
  '/login',

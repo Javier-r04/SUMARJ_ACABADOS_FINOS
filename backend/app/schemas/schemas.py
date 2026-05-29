@@ -348,6 +348,7 @@ class ReporteFila(BaseModel):
     tipo: str  # "venta" | "compra"
     folio: str
     productos: str
+    cantidad: int = 0  # total de unidades en la transacción
     cliente_o_proveedor: str
     fecha: datetime
     total: Decimal
