@@ -5,6 +5,28 @@ App.views.cotizaciones = {
  busqueda: '',
  nueva: { items: [] },
 
+ // ----------------------------------------------------------
+ // Helpers de precio: aplican promo si está vigente
+ // ----------------------------------------------------------
+ _promoVigente(prod) {
+ if (!prod.precio_pieza_promo) return false;
+ if (!prod.promo_fin) return true;
+ return new Date(prod.promo_fin) > new Date();
+ },
+ _precioCaja(prod) {
+ return this._promoVigente(prod)
+ ? Number(prod.precio_pieza) || 0
+ : Number(prod.precio_unitario) || 0;
+ },
+ _precioPieza(prod) {
+ const piezas = prod.piezas_por_caja || 0;
+ if (piezas <= 0) return 0;
+ return this._precioCaja(prod) / piezas;
+ },
+ _precioParaUnidad(prod, unidad) {
+ return unidad === 'pieza' ? this._precioPieza(prod) : this._precioCaja(prod);
+ },
+
  async render(container) {
  container.innerHTML = App.pageHeader(
  'Cotizaciones',
@@ -267,14 +289,14 @@ App.views.cotizaciones = {
  style="padding: 16px; flex-direction: column; gap: 4px; border: 2px solid var(--gold);">
  <div style="font-size: 22px;">📦</div>
  <div style="font-weight: 700;">Por Caja</div>
- <div style="font-size: 12px; color: var(--gold);">${App.fmtMoney(prod.precio_unitario)}</div>
+ <div style="font-size: 12px; color: var(--gold);">${App.fmtMoney(this._precioCaja(prod))}${this._promoVigente(prod) ? ' ★' : ''}</div>
  </button>
  <button class="btn btn-ghost" id="btnCotPieza"
  onclick="App.views.cotizaciones._setUnidad('pieza')"
  style="padding: 16px; flex-direction: column; gap: 4px; border: 2px solid transparent;">
  <div style="font-size: 22px;">🧱</div>
  <div style="font-weight: 700;">Por Pieza</div>
- <div style="font-size: 12px; color: var(--gold);">${App.fmtMoney(prod.precio_pieza)}${prod.precio_pieza_promo ? ' ★' : ''}</div>
+ <div style="font-size: 12px; color: var(--gold);">${App.fmtMoney(this._precioPieza(prod))}${this._promoVigente(prod) ? ' ★' : ''}</div>
  </button>
  </div>
 
@@ -333,7 +355,7 @@ App.views.cotizaciones = {
  const exist = this.nueva.items.find(i =>
  i.producto_id === prod.id && (i.unidad_venta || 'caja') === unidad
  );
- const precio = unidad === 'pieza' ? Number(prod.precio_pieza) : Number(prod.precio_unitario);
+ const precio = this._precioParaUnidad(prod, unidad);
  if (exist) {
  exist.cantidad += cantidad;
  } else {

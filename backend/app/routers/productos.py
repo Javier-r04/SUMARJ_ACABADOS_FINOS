@@ -235,15 +235,29 @@ def promo_vigente(prod: Producto) -> bool:
 def precio_para_unidad(prod: Producto, unidad: str) -> Decimal:
     """
     Devuelve el precio que se debe cobrar según la unidad de venta.
-    Si la promo ha expirado, devuelve el precio calculado (caja / piezas).
+
+    Si el producto tiene promo VIGENTE:
+      - 'caja'  -> precio_pieza (que ahora representa "precio promocional de caja")
+      - 'pieza' -> precio_pieza / piezas_por_caja
+    Si NO hay promo vigente:
+      - 'caja'  -> precio_unitario (precio normal)
+      - 'pieza' -> precio_unitario / piezas_por_caja
     """
     from decimal import Decimal as D
+
+    if promo_vigente(prod):
+        precio_caja_promo = D(str(prod.precio_pieza))
+        if unidad == "caja":
+            return precio_caja_promo
+        # unidad == 'pieza'
+        if prod.piezas_por_caja > 0:
+            return precio_caja_promo / D(str(prod.piezas_por_caja))
+        return precio_caja_promo
+
+    # Sin promo vigente
     if unidad == "caja":
         return D(str(prod.precio_unitario))
     # unidad == 'pieza'
-    if promo_vigente(prod):
-        return D(str(prod.precio_pieza))
-    # Promo expirada o sin promo: usar cálculo automático
     if prod.piezas_por_caja > 0:
         return D(str(prod.precio_unitario)) / D(str(prod.piezas_por_caja))
     return D(str(prod.precio_pieza))

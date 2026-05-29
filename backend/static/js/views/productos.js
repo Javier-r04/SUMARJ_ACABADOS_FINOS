@@ -109,26 +109,47 @@ App.views.productos = {
  : `<span class="badge ${stockBajo ? 'badge-danger' : 'badge-success'}">${p.stock}</span>`;
  const precioCelda = vendePiezas
  ? (() => {
- // Detectar si hay promo vigente y mostrar fecha de fin
- let badgePromo = '';
+ // Detectar si hay promo vigente
+ let promoVigente = false;
+ let fechaFin = null;
  if (p.precio_pieza_promo) {
  if (p.promo_fin) {
- const fin = new Date(p.promo_fin);
- const hoy = new Date();
- const vigente = fin > hoy;
- if (vigente) {
- const fechaFmt = fin.toLocaleDateString('es-MX', { day: '2-digit', month: '2-digit', year: '2-digit' });
- badgePromo = ` <span style="display: inline-block; padding: 1px 5px; background: rgba(212, 175, 55, 0.15); color: var(--gold); border-radius: 3px; font-size: 9px; font-weight: 600;">★ hasta ${fechaFmt}</span>`;
- }
+ fechaFin = new Date(p.promo_fin);
+ promoVigente = fechaFin > new Date();
  } else {
- // Promo sin vigencia (indefinida)
- badgePromo = ' ★';
+ promoVigente = true; // sin vigencia = indefinida
  }
  }
- return `<div style="color: var(--gold); font-weight: 600;">${App.fmtMoney(p.precio_unitario)}</div>
+
+ // Precios mostrados
+ const precioCajaNormal = Number(p.precio_unitario || 0);
+ const precioCajaPromo = Number(p.precio_pieza || 0);
+ const precioPiezaNormal = p.piezas_por_caja > 0 ? precioCajaNormal / p.piezas_por_caja : 0;
+ const precioPiezaPromo = p.piezas_por_caja > 0 ? precioCajaPromo / p.piezas_por_caja : 0;
+
+ if (promoVigente) {
+ const fechaFmt = fechaFin
+ ? fechaFin.toLocaleDateString('es-MX', { day: '2-digit', month: '2-digit', year: '2-digit' })
+ : null;
+ const badgeFecha = fechaFmt
+ ? `<div style="display: inline-block; padding: 1px 5px; margin-top: 3px; background: rgba(212, 175, 55, 0.15); color: var(--gold); border-radius: 3px; font-size: 9px; font-weight: 600;">★ ${App.escape(p.nombre)} en promo · hasta ${fechaFmt}</div>`
+ : `<div style="display: inline-block; padding: 1px 5px; margin-top: 3px; background: rgba(212, 175, 55, 0.15); color: var(--gold); border-radius: 3px; font-size: 9px; font-weight: 600;">★ ${App.escape(p.nombre)} en promo</div>`;
+ return `
+ <div style="text-decoration: line-through; color: var(--text-muted); font-size: 11px;">${App.fmtMoney(precioCajaNormal)}</div>
+ <div style="color: var(--gold); font-weight: 600;">${App.fmtMoney(precioCajaPromo)}</div>
  <div style="font-size: 10px; color: var(--text-muted); margin-top: 2px;">
- ${App.fmtMoney(p.precio_pieza)} / pza${badgePromo}
- </div>`;
+ ${App.fmtMoney(precioPiezaPromo)} / pza
+ </div>
+ ${badgeFecha}
+ `;
+ }
+ // Sin promo
+ return `
+ <div style="color: var(--gold); font-weight: 600;">${App.fmtMoney(precioCajaNormal)}</div>
+ <div style="font-size: 10px; color: var(--text-muted); margin-top: 2px;">
+ ${App.fmtMoney(precioPiezaNormal)} / pza
+ </div>
+ `;
  })()
  : `<span style="color: var(--gold); font-weight: 600;">${App.fmtMoney(p.precio_unitario)}</span>`;
  return `
@@ -308,18 +329,32 @@ App.views.productos = {
  ${p.precio_pieza_promo ? 'checked' : ''}
  onchange="App.views.productos._togglePrecioPromo()"
  style="cursor: pointer;">
- <span>Precio promocional por pieza (manual)</span>
+ <span>Precio promocional</span>
  </label>
  </div>
 
  <div class="form-group">
- <label class="form-label">Precio por pieza</label>
+ <label class="form-label">Precio promocional</label>
  <input class="form-input" id="fPrecioPieza" type="number" step="0.01" min="0"
  value="${p.precio_pieza || 0}"
  ${p.precio_pieza_promo ? '' : 'readonly'}
+ oninput="App.views.productos._previewPromo()"
  style="${p.precio_pieza_promo ? '' : 'background: var(--surface-alt); cursor: not-allowed; opacity: 0.7;'}">
  <div id="fHintPrecioPieza" style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">
- ${p.precio_pieza_promo ? '✏️ Modo promocional: edita el precio manualmente' : '⚙️ Cálculo automático: precio de caja ÷ piezas por caja'}
+ ${p.precio_pieza_promo ? '✏️ Edita el precio promocional manualmente' : '⚙️ Sin promoción: precio normal por pieza = precio caja ÷ piezas'}
+ </div>
+
+ <!-- Preview de cómo quedará la promo -->
+ <div id="fPreviewPromo" style="display: ${p.precio_pieza_promo ? 'block' : 'none'}; margin-top: 10px; padding: 10px 12px; background: rgba(212, 175, 55, 0.08); border-radius: 4px; font-size: 12px;">
+ <div style="text-transform: uppercase; letter-spacing: 0.08em; font-size: 10px; color: var(--text-muted); margin-bottom: 6px; font-weight: 600;">Vista previa de la promoción</div>
+ <div style="display: flex; justify-content: space-between; padding: 2px 0;">
+ <span id="fPreviewLabelCaja">${App.escape(p.nombre || 'Producto')} en promo:</span>
+ <strong style="color: var(--gold);" id="fPreviewCaja">${App.fmtMoney(p.precio_pieza || 0)}</strong>
+ </div>
+ <div style="display: flex; justify-content: space-between; padding: 2px 0;">
+ <span>Pieza:</span>
+ <strong style="color: var(--gold);" id="fPreviewPieza">${App.fmtMoney(p.piezas_por_caja > 0 ? (p.precio_pieza || 0) / p.piezas_por_caja : 0)}</strong>
+ </div>
  </div>
  </div>
 
@@ -378,14 +413,12 @@ App.views.productos = {
  ? !!document.getElementById('fPrecioPiezaPromo')?.checked
  : false;
  const precioCaja = parseFloat(document.getElementById('fPrecio').value) || 0;
- let precioPieza = 0;
- if (vendePorPiezas) {
- if (precioPiezaPromo) {
- precioPieza = parseFloat(document.getElementById('fPrecioPieza').value) || 0;
- } else if (piezasPorCaja > 0) {
- precioPieza = precioCaja / piezasPorCaja;
+ let precioPromo = 0;
+ if (vendePorPiezas && precioPiezaPromo) {
+ // Cuando hay promo activa, este campo guarda el PRECIO PROMOCIONAL DE CAJA
+ precioPromo = parseFloat(document.getElementById('fPrecioPieza').value) || 0;
  }
- }
+ // Si no hay promo, el backend calculará el precio por pieza automáticamente
 
  // Vigencia de la promoción
  const vigenciaActiva = precioPiezaPromo && !!document.getElementById('fVigenciaActiva')?.checked;
@@ -412,7 +445,7 @@ App.views.productos = {
  stock: parseInt(document.getElementById('fStock').value) || 0,
  stock_alerta: parseInt(document.getElementById('fStockAlerta').value) || 5,
  piezas_por_caja: piezasPorCaja,
- precio_pieza: precioPieza,
+ precio_pieza: precioPromo,
  precio_pieza_promo: precioPiezaPromo,
  stock_piezas_sueltas: stockPiezasSueltas,
  promo_dias: promoDias,
@@ -453,24 +486,43 @@ App.views.productos = {
  const input = document.getElementById('fPrecioPieza');
  const hint = document.getElementById('fHintPrecioPieza');
  const bloqueVig = document.getElementById('bloqueVigencia');
+ const preview = document.getElementById('fPreviewPromo');
  if (!cb || !input) return;
  if (cb.checked) {
  input.readOnly = false;
  input.style.cssText = '';
- if (hint) hint.innerHTML = '✏️ Modo promocional: edita el precio manualmente';
+ if (hint) hint.innerHTML = '✏️ Edita el precio promocional manualmente';
  if (bloqueVig) bloqueVig.style.display = 'block';
+ if (preview) preview.style.display = 'block';
+ // Si el precio promo está vacío, sugerir el precio de caja como punto de partida
+ if (!parseFloat(input.value)) {
+ const precioCaja = parseFloat(document.getElementById('fPrecio')?.value) || 0;
+ input.value = precioCaja > 0 ? precioCaja.toFixed(2) : '';
+ }
+ this._previewPromo();
  } else {
  input.readOnly = true;
  input.style.cssText = 'background: var(--surface-alt); cursor: not-allowed; opacity: 0.7;';
- if (hint) hint.innerHTML = '⚙️ Cálculo automático: precio de caja ÷ piezas por caja';
+ if (hint) hint.innerHTML = '⚙️ Sin promoción: precio normal por pieza = precio caja ÷ piezas';
  if (bloqueVig) bloqueVig.style.display = 'none';
- // Limpiar checkbox de vigencia también
+ if (preview) preview.style.display = 'none';
  const cbVig = document.getElementById('fVigenciaActiva');
  if (cbVig) cbVig.checked = false;
  const bloqueIn = document.getElementById('bloqueVigenciaInputs');
  if (bloqueIn) bloqueIn.style.display = 'none';
- this._recalcularPrecioPieza();
  }
+ },
+
+ _previewPromo() {
+ const precioPromo = parseFloat(document.getElementById('fPrecioPieza')?.value) || 0;
+ const piezas = parseInt(document.getElementById('fPiezasPorCaja')?.value) || 0;
+ const previewCaja = document.getElementById('fPreviewCaja');
+ const previewPieza = document.getElementById('fPreviewPieza');
+ const labelCaja = document.getElementById('fPreviewLabelCaja');
+ const nombre = (document.getElementById('fNombre')?.value || 'Producto').trim();
+ if (labelCaja) labelCaja.textContent = `${nombre} en promo:`;
+ if (previewCaja) previewCaja.textContent = App.fmtMoney(precioPromo);
+ if (previewPieza) previewPieza.textContent = App.fmtMoney(piezas > 0 ? precioPromo / piezas : 0);
  },
 
  _toggleVigencia() {
@@ -501,19 +553,11 @@ App.views.productos = {
  },
 
  _recalcularPrecioPieza() {
- const cb = document.getElementById('fVendePorPiezas');
- if (!cb?.checked) return;
- const promo = document.getElementById('fPrecioPiezaPromo')?.checked;
- if (promo) return; // En modo manual no recalculamos
- const precioCaja = parseFloat(document.getElementById('fPrecio')?.value) || 0;
- const piezas = parseInt(document.getElementById('fPiezasPorCaja')?.value) || 0;
- const inputPP = document.getElementById('fPrecioPieza');
- if (!inputPP) return;
- if (piezas > 0) {
- inputPP.value = (precioCaja / piezas).toFixed(2);
- } else {
- inputPP.value = '0.00';
- }
+ // Ya no hace falta autocompletar el campo: cuando NO hay promo, el sistema
+ // calcula automáticamente el precio por pieza en el backend (precio_caja ÷ piezas).
+ // Cuando SÍ hay promo, el usuario edita libremente el precio promocional.
+ // Esta función sólo refresca el preview en pantalla.
+ this._previewPromo();
  },
 
  async eliminar(id) {

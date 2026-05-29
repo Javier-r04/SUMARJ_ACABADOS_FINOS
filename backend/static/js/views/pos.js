@@ -1,7 +1,35 @@
 App.views.pos = {
  productos: [],
- carrito: [], // [{ producto, cantidad }]
+ carrito: [], // [{ producto, cantidad, unidad_venta }]
  busqueda: '',
+
+ // ----------------------------------------------------------
+ // Helpers de precio: aplican promo si está vigente
+ // ----------------------------------------------------------
+ _promoVigente(prod) {
+ if (!prod.precio_pieza_promo) return false;
+ if (!prod.promo_fin) return true; // promo indefinida
+ const fin = new Date(prod.promo_fin);
+ return fin > new Date();
+ },
+
+ _precioCaja(prod) {
+ if (this._promoVigente(prod)) {
+ return Number(prod.precio_pieza) || 0;
+ }
+ return Number(prod.precio_unitario) || 0;
+ },
+
+ _precioPieza(prod) {
+ const piezas = prod.piezas_por_caja || 0;
+ if (piezas <= 0) return 0;
+ const precioCaja = this._precioCaja(prod);
+ return precioCaja / piezas;
+ },
+
+ _precioParaUnidad(prod, unidad) {
+ return unidad === 'pieza' ? this._precioPieza(prod) : this._precioCaja(prod);
+ },
 
  async render(container) {
  container.innerHTML = App.pageHeader(
@@ -103,6 +131,14 @@ App.views.pos = {
  }
 
  list.innerHTML = filtrados.map(p => {
+ const enPromo = this._promoVigente(p);
+ const precioEfectivo = this._precioCaja(p);
+ const precioOriginal = Number(p.precio_unitario || 0);
+ const priceHtml = enPromo
+ ? `<div style="font-size: 11px; text-decoration: line-through; color: var(--text-muted);">${App.fmtMoney(precioOriginal)}</div>
+ <div style="color: var(--gold); font-weight: 700;">${App.fmtMoney(precioEfectivo)}</div>
+ <div style="font-size: 9px; color: var(--gold);">★ EN PROMO</div>`
+ : `${App.fmtMoney(precioEfectivo)}`;
  return `
  <div class="pos-product-row" onclick="App.views.pos.agregarProducto(${p.id})">
  <div class="code">${App.escape(p.codigo)}</div>
@@ -110,7 +146,7 @@ App.views.pos = {
  <div class="name">${App.escape(p.nombre)}</div>
  <div class="stock">Stock: ${p.stock} ${p.stock <= p.stock_alerta ? '' : ''}</div>
  </div>
- <div class="price">${App.fmtMoney(p.precio_unitario)}</div>
+ <div class="price">${priceHtml}</div>
  </div>
  `;
  }).join('');
@@ -170,7 +206,7 @@ App.views.pos = {
  style="padding: 16px; flex-direction: column; gap: 4px; border: 2px solid var(--gold); ${puedeCaja ? '' : 'opacity: 0.5;'}">
  <div style="font-size: 22px;">📦</div>
  <div style="font-weight: 700;">Por Caja</div>
- <div style="font-size: 12px; color: var(--gold);">${App.fmtMoney(prod.precio_unitario)}</div>
+ <div style="font-size: 12px; color: var(--gold);">${App.fmtMoney(this._precioCaja(prod))}${this._promoVigente(prod) ? ' ★' : ''}</div>
  </button>
  <button class="btn ${puedePieza ? 'btn-ghost' : ''}" id="btnUnidPieza"
  ${puedePieza ? '' : 'disabled'}
@@ -178,7 +214,7 @@ App.views.pos = {
  style="padding: 16px; flex-direction: column; gap: 4px; border: 2px solid transparent; ${puedePieza ? '' : 'opacity: 0.5;'}">
  <div style="font-size: 22px;">🧱</div>
  <div style="font-weight: 700;">Por Pieza</div>
- <div style="font-size: 12px; color: var(--gold);">${App.fmtMoney(prod.precio_pieza)}${prod.precio_pieza_promo ? ' ★' : ''}</div>
+ <div style="font-size: 12px; color: var(--gold);">${App.fmtMoney(this._precioPieza(prod))}${this._promoVigente(prod) ? ' ★' : ''}</div>
  </button>
  </div>
 
@@ -365,14 +401,13 @@ App.views.pos = {
  items.innerHTML = this.carrito.map((item, idx) => {
  const { producto, cantidad } = item;
  const unidad = item.unidad_venta || 'caja';
- const precio = unidad === 'pieza'
- ? Number(producto.precio_pieza)
- : Number(producto.precio_unitario);
+ const precio = this._precioParaUnidad(producto, unidad);
  const sub = precio * cantidad;
  subtotal += sub;
+ const enPromo = this._promoVigente(producto);
  const etiquetaUnidad = unidad === 'pieza'
- ? `🧱 Por pieza (${App.fmtMoney(precio)} c/u)`
- : `📦 Por caja (${App.fmtMoney(precio)} c/u)`;
+ ? `🧱 Por pieza (${App.fmtMoney(precio)} c/u)${enPromo ? ' ★' : ''}`
+ : `📦 Por caja (${App.fmtMoney(precio)} c/u)${enPromo ? ' ★' : ''}`;
  return `
  <div class="cart-item">
  <div class="top">
@@ -440,13 +475,10 @@ App.views.pos = {
  return;
  }
 
- // Calcular el subtotal y aplicar descuento (usando precio según unidad)
+ // Calcular el subtotal y aplicar descuento (precio efectivo según promo + unidad)
  const subtotal = this.carrito.reduce((sum, c) => {
  const unidad = c.unidad_venta || 'caja';
- const precio = unidad === 'pieza'
- ? Number(c.producto.precio_pieza)
- : Number(c.producto.precio_unitario);
- return sum + (precio * c.cantidad);
+ return sum + (this._precioParaUnidad(c.producto, unidad) * c.cantidad);
  }, 0);
  const pctDesc = this._obtenerDescuento();
  const total = subtotal - (subtotal * pctDesc / 100);

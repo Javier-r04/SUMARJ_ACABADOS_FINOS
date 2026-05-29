@@ -6,6 +6,28 @@ App.views.ventas = {
  editCarrito: [],
  editCliente: '',
 
+ // ----------------------------------------------------------
+ // Helpers de precio: aplican promo si está vigente
+ // ----------------------------------------------------------
+ _promoVigente(prod) {
+ if (!prod.precio_pieza_promo) return false;
+ if (!prod.promo_fin) return true;
+ return new Date(prod.promo_fin) > new Date();
+ },
+ _precioCaja(prod) {
+ return this._promoVigente(prod)
+ ? Number(prod.precio_pieza) || 0
+ : Number(prod.precio_unitario) || 0;
+ },
+ _precioPieza(prod) {
+ const piezas = prod.piezas_por_caja || 0;
+ if (piezas <= 0) return 0;
+ return this._precioCaja(prod) / piezas;
+ },
+ _precioParaUnidad(prod, unidad) {
+ return unidad === 'pieza' ? this._precioPieza(prod) : this._precioCaja(prod);
+ },
+
  async render(container) {
  container.innerHTML = App.pageHeader(
  'Ventas',
@@ -286,11 +308,8 @@ App.views.ventas = {
  if (!item) return;
  if ((item.unidad_venta || 'caja') === nuevaUnidad) return;
  item.unidad_venta = nuevaUnidad;
- // Recalcular precio según unidad
- const prod = item.producto;
- item.producto.precio_unitario_actual = nuevaUnidad === 'pieza'
- ? Number(prod.precio_pieza)
- : Number(prod.precio_unitario);
+ // Recalcular precio según unidad (con promo si aplica)
+ item.producto.precio_unitario_actual = this._precioParaUnidad(item.producto, nuevaUnidad);
  this._renderEditCarrito();
  },
 
@@ -374,9 +393,7 @@ App.views.ventas = {
  tbody.innerHTML = this.editCarrito.map((it, idx) => {
  const unidad = it.unidad_venta || 'caja';
  const vendePiezas = (it.producto.piezas_por_caja || 0) > 0;
- const precioUnit = unidad === 'pieza'
- ? Number(it.producto.precio_pieza)
- : Number(it.producto.precio_unitario);
+ const precioUnit = this._precioParaUnidad(it.producto, unidad);
  const sub = it.cantidad * precioUnit;
  total += sub;
 
