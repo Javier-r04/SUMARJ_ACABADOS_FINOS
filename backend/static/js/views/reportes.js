@@ -435,14 +435,14 @@ App.views.reportes = {
  const gan = Number(this.datos.ganancias);
  const labelResultado = gan >= 0 ? 'GANANCIA' : 'PERDIDA';
  kpis = [
- { label: 'Total Ventas', value: App.fmtMoney(this.datos.suma_ventas), color: [40, 130, 40] },
- { label: 'Total Compras', value: App.fmtMoney(this.datos.suma_compras), color: [170, 60, 60] },
- { label: labelResultado, value: App.fmtMoney(Math.abs(gan)),
+ { label: 'Total Ventas', value: App.fmtMoneyPlain(this.datos.suma_ventas), color: [40, 130, 40] },
+ { label: 'Total Compras', value: App.fmtMoneyPlain(this.datos.suma_compras), color: [170, 60, 60] },
+ { label: labelResultado, value: App.fmtMoneyPlain(Math.abs(gan)),
  color: gan >= 0 ? [40, 130, 40] : [170, 60, 60] },
  ];
  } else {
  kpis = [
- { label: 'Total Acumulado', value: App.fmtMoney(this.datos.ingresos_totales), color: [160, 130, 30] },
+ { label: 'Total Acumulado', value: App.fmtMoneyPlain(this.datos.ingresos_totales), color: [160, 130, 30] },
  { label: 'Movimientos', value: App.fmtNumber(this.datos.movimientos), color: [160, 130, 30] },
  ];
  }
@@ -484,7 +484,7 @@ App.views.reportes = {
  this.truncate(f.productos, 50),
  this.truncate(f.cliente_o_proveedor, 25),
  App.fmtDate(f.fecha),
- (esVenta ? '+ ' : '- ') + App.fmtMoney(f.total),
+ (esVenta ? '+ ' : '- ') + App.fmtMoneyPlain(f.total),
  ];
  });
  columnStyles = {
@@ -503,7 +503,7 @@ App.views.reportes = {
  this.truncate(f.productos, 60),
  this.truncate(f.cliente_o_proveedor, 30),
  App.fmtDate(f.fecha),
- App.fmtMoney(f.total),
+ App.fmtMoneyPlain(f.total),
  ]);
  columnStyles = {
  0: { cellWidth: 22, textColor: [160, 130, 30], fontStyle: 'bold' },
@@ -598,13 +598,13 @@ App.views.reportes = {
  doc.setFont('helvetica', 'bold');
  doc.setFontSize(11);
  const labelFinal = gan >= 0 ? 'Ganancia neta' : 'Perdida neta';
- doc.text(labelFinal + ': ' + App.fmtMoney(Math.abs(gan)),
+ doc.text(labelFinal + ': ' + App.fmtMoneyPlain(Math.abs(gan)),
  cajaX + 6, finalY + 14);
 
  doc.setTextColor(160, 160, 150);
  doc.setFont('helvetica', 'normal');
  doc.setFontSize(7);
- doc.text(`${this.datos.movimientos} movimientos - Ventas ${App.fmtMoney(this.datos.suma_ventas)} - Compras ${App.fmtMoney(this.datos.suma_compras)}`,
+ doc.text(`${this.datos.movimientos} movimientos - Ventas ${App.fmtMoneyPlain(this.datos.suma_ventas)} - Compras ${App.fmtMoneyPlain(this.datos.suma_compras)}`,
  cajaX + 6, finalY + 19);
  } else {
  doc.setFillColor(10, 10, 10);
@@ -614,7 +614,7 @@ App.views.reportes = {
  doc.setFontSize(10);
  doc.text('TOTAL:', pageW - 76, finalY + 7.5);
  doc.setFontSize(11);
- doc.text(App.fmtMoney(this.datos.ingresos_totales), pageW - 17, finalY + 7.5, { align: 'right' });
+ doc.text(App.fmtMoneyPlain(this.datos.ingresos_totales), pageW - 17, finalY + 7.5, { align: 'right' });
  }
  }
 
