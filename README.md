@@ -47,16 +47,7 @@ Abre tu navegador (Chrome, Firefox, Edge) y ve a:
 
 **http://localhost:8000**
 
-### 5. Iniciar sesión
 
-Usa las credenciales iniciales del administrador:
-
-- **Usuario:** `admin`
-- **Contraseña:** `admin123`
-
-> ⚠️ **Importante:** Cambia esta contraseña inmediatamente desde el módulo **Usuarios** una vez dentro del sistema.
-
----
 
 ## Comandos útiles
 
